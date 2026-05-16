@@ -6,6 +6,13 @@ export interface Semester {
   isActive: boolean
 }
 
+export interface ScheduleSlot {
+  day: number       // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+  startTime: string // "HH:MM"
+  endTime: string   // "HH:MM"
+  location?: string
+}
+
 export interface Course {
   id: string
   semesterId: string
@@ -15,6 +22,7 @@ export interface Course {
   credits?: number
   schedule?: string
   classroom?: string
+  scheduleSlots?: ScheduleSlot[]
   color: string
   gradingPolicy?: string
   createdAt: string

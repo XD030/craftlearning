@@ -11,6 +11,7 @@ import { Search } from './pages/Search/Search'
 import { ProjectList } from './pages/Projects/ProjectList'
 import { ProjectDetail } from './pages/Projects/ProjectDetail'
 import { Settings } from './pages/Settings/Settings'
+import { Timetable } from './pages/Timetable/Timetable'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
             <Route path="/courses" element={<CourseList />} />
             <Route path="/courses/:id" element={<CourseDetail />} />
             <Route path="/search" element={<Search />} />
+            <Route path="/timetable" element={<Timetable />} />
             <Route path="/projects" element={<ProjectList />} />
             <Route path="/projects/:id" element={<ProjectDetail />} />
             <Route path="/settings" element={<Settings />} />

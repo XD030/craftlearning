@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, BookOpen, FolderKanban, Settings, GraduationCap } from 'lucide-react'
+import { LayoutDashboard, BookOpen, FolderKanban, Settings, GraduationCap, CalendarDays } from 'lucide-react'
 import { clsx } from '../../utils/clsx'
 
 const links = [
   { to: '/', icon: LayoutDashboard, label: '儀表板' },
   { to: '/courses', icon: BookOpen, label: '課程' },
+  { to: '/timetable', icon: CalendarDays, label: '課表' },
   { to: '/projects', icon: FolderKanban, label: '小組專案' },
   { to: '/settings', icon: Settings, label: '設定' },
 ]

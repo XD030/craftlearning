@@ -39,6 +39,9 @@ const DAY_OF_WEEK_MAP: Record<string, number> = {
 function parseTodayCourses(courses: Course[]): Course[] {
   const today = new Date().getDay()
   return courses.filter(c => {
+    if (c.scheduleSlots && c.scheduleSlots.length > 0) {
+      return c.scheduleSlots.some(s => s.day === today)
+    }
     if (!c.schedule) return false
     const match = c.schedule.match(/週[一二三四五六日]/)
     return match ? DAY_OF_WEEK_MAP[match[0]] === today : false
