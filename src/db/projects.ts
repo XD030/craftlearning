@@ -6,6 +6,15 @@ export async function getAllProjects(): Promise<GroupProject[]> {
   return db.groupProjects.orderBy('createdAt').reverse().toArray()
 }
 
+export async function getUpcomingProjects(days = 14): Promise<GroupProject[]> {
+  const now = new Date().toISOString()
+  const limit = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
+  const all = await db.groupProjects.toArray()
+  return all
+    .filter(p => p.dueDate && p.dueDate >= now && p.dueDate <= limit)
+    .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''))
+}
+
 export async function getProjectsByCourse(courseId: string): Promise<GroupProject[]> {
   return db.groupProjects.where('courseId').equals(courseId).toArray()
 }

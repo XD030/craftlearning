@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Calendar, Clock, BookMarked, FileText, CheckSquare } from 'lucide-react'
-import type { Task, Course } from '../../types'
+import type { Task, Course, GroupProject } from '../../types'
 import { getUpcomingTasks } from '../../db/tasks'
+import { getUpcomingProjects } from '../../db/projects'
 import { getCoursesBySemester } from '../../db/courses'
 import { getUnreviewedCountByCourse, createNote } from '../../db/notes'
 import { createTask } from '../../db/tasks'
@@ -52,6 +53,7 @@ export function Dashboard() {
   const { state } = useApp()
   const navigate = useNavigate()
   const [tasks, setTasks] = useState<Task[]>([])
+  const [projects, setProjects] = useState<GroupProject[]>([])
   const [courses, setCourses] = useState<Course[]>([])
   const [unreviewedMap, setUnreviewedMap] = useState<Record<string, number>>({})
   const [showNewNote, setShowNewNote] = useState(false)
@@ -62,6 +64,7 @@ export function Dashboard() {
 
   useEffect(() => {
     getUpcomingTasks(14).then(setTasks)
+    getUpcomingProjects(14).then(setProjects)
     if (state.activeSemesterId) {
       getCoursesBySemester(state.activeSemesterId).then(async cs => {
         setCourses(cs)
@@ -108,9 +111,19 @@ export function Dashboard() {
     await createTask(data)
     setShowNewTask(false)
     getUpcomingTasks(14).then(setTasks)
+    getUpcomingProjects(14).then(setProjects)
   }
 
   const courseMap = Object.fromEntries(courses.map(c => [c.id, c]))
+
+  type UpcomingItem =
+    | { kind: 'task'; dueDate: string; data: Task }
+    | { kind: 'project'; dueDate: string; data: GroupProject }
+
+  const upcomingItems: UpcomingItem[] = [
+    ...tasks.map(t => ({ kind: 'task' as const, dueDate: t.dueDate, data: t })),
+    ...projects.map(p => ({ kind: 'project' as const, dueDate: p.dueDate!, data: p })),
+  ].sort((a, b) => a.dueDate.localeCompare(b.dueDate))
   const todayCourses = parseTodayCourses(courses)
   const now = new Date()
   const DAY_NAMES = ['日', '一', '二', '三', '四', '五', '六']
@@ -135,36 +148,66 @@ export function Dashboard() {
             </div>
             <span className="text-xs text-slate-400 dark:text-slate-500">14 天內</span>
           </div>
-          {tasks.length === 0 ? (
+          {upcomingItems.length === 0 ? (
             <p className="text-sm text-slate-400 dark:text-slate-500 py-4 text-center">近期沒有待辦任務</p>
           ) : (
             <div className="space-y-2">
-              {tasks.map(task => {
-                const days = getDaysUntil(task.dueDate)
-                const course = courseMap[task.courseId]
-                return (
-                  <button
-                    key={task.id}
-                    onClick={() => navigate(`/courses/${task.courseId}`)}
-                    className={clsx(
-                      'w-full text-left flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors hover:brightness-95',
-                      urgencyBg(days)
-                    )}
-                  >
-                    {course && (
-                      <div className="w-2 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: course.color }} />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{task.title}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {TASK_TYPE_LABELS[task.type]} · {course?.name ?? '未知課程'}
-                      </p>
-                    </div>
-                    <span className={clsx('text-xs font-semibold flex-shrink-0', urgencyColor(days))}>
-                      {days <= 0 ? '今天' : `${days} 天`}
-                    </span>
-                  </button>
-                )
+              {upcomingItems.map(item => {
+                const days = getDaysUntil(item.dueDate)
+                if (item.kind === 'task') {
+                  const task = item.data
+                  const course = courseMap[task.courseId]
+                  return (
+                    <button
+                      key={`task-${task.id}`}
+                      onClick={() => navigate(`/courses/${task.courseId}`)}
+                      className={clsx(
+                        'w-full text-left flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors hover:brightness-95',
+                        urgencyBg(days)
+                      )}
+                    >
+                      {course && (
+                        <div className="w-2 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: course.color }} />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{task.title}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {TASK_TYPE_LABELS[task.type]} · {course?.name ?? '未知課程'}
+                        </p>
+                      </div>
+                      <span className={clsx('text-xs font-semibold flex-shrink-0', urgencyColor(days))}>
+                        {days <= 0 ? '今天' : `${days} 天`}
+                      </span>
+                    </button>
+                  )
+                } else {
+                  const project = item.data
+                  const course = project.courseId ? courseMap[project.courseId] : undefined
+                  return (
+                    <button
+                      key={`project-${project.id}`}
+                      onClick={() => navigate(`/projects/${project.id}`)}
+                      className={clsx(
+                        'w-full text-left flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors hover:brightness-95',
+                        urgencyBg(days)
+                      )}
+                    >
+                      <div
+                        className="w-2 h-8 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: course?.color ?? '#64748b' }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{project.name}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          小組專案{course ? ` · ${course.name}` : ''}
+                        </p>
+                      </div>
+                      <span className={clsx('text-xs font-semibold flex-shrink-0', urgencyColor(days))}>
+                        {days <= 0 ? '今天' : `${days} 天`}
+                      </span>
+                    </button>
+                  )
+                }
               })}
             </div>
           )}
