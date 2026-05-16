@@ -179,7 +179,7 @@ export function Settings() {
   }
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="h-full overflow-y-auto"><div className="p-8 max-w-2xl">
       <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-8">設定</h1>
 
       {/* 學期管理 */}
@@ -310,6 +310,6 @@ export function Settings() {
         confirmLabel="確認清除"
         danger
       />
-    </div>
+    </div></div>
   )
 }

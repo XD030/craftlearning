@@ -57,7 +57,7 @@ export function ProjectList() {
   const courseMap = Object.fromEntries(courses.map(c => [c.id, c]))
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
+    <div className="h-full overflow-y-auto"><div className="p-8 max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">小組專案</h1>
         <Button onClick={() => setShowNew(true)}><Plus size={14} /> 新增專案</Button>
@@ -146,6 +146,6 @@ export function ProjectList() {
         confirmLabel="確認刪除"
         danger
       />
-    </div>
+    </div></div>
   )
 }

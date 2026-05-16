@@ -57,7 +57,7 @@ export function Search() {
   }, {})
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
+    <div className="h-full overflow-y-auto"><div className="p-8 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">搜尋</h1>
 
       <div className="flex items-center gap-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 mb-8 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-shadow">
@@ -116,6 +116,6 @@ export function Search() {
           })}
         </div>
       )}
-    </div>
+    </div></div>
   )
 }

@@ -33,7 +33,7 @@ export function CourseList() {
   const semester = state.semesters.find(s => s.id === activeSemesterId)
 
   return (
-    <div className="p-8">
+    <div className="h-full overflow-y-auto"><div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">課程</h1>
@@ -74,7 +74,7 @@ export function CourseList() {
           </div>
         )}
       </Modal>
-    </div>
+    </div></div>
   )
 }
 

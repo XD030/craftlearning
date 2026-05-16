@@ -77,7 +77,7 @@ export function ProjectDetail() {
   const doneTasks = project.tasks.filter(t => t.done).length
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
+    <div className="h-full overflow-y-auto"><div className="p-8 max-w-3xl mx-auto">
       <button
         onClick={() => navigate('/projects')}
         className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-6 transition-colors"
@@ -224,6 +224,6 @@ export function ProjectDetail() {
           />
         )}
       </section>
-    </div>
+    </div></div>
   )
 }
