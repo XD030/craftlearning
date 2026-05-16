@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { HashRouter, Routes, Route } from 'react-router-dom'
 import { AppProvider } from './contexts/AppContext'
 import { Layout } from './components/Layout/Layout'
 import { Dashboard } from './pages/Dashboard/Dashboard'
@@ -15,7 +15,7 @@ import { Settings } from './pages/Settings/Settings'
 export default function App() {
   return (
     <AppProvider>
-      <BrowserRouter>
+      <HashRouter>
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
@@ -31,7 +31,7 @@ export default function App() {
           <Route path="/courses/:id/quiz" element={<QuizMode />} />
           <Route path="/courses/:id/review" element={<ReviewMode />} />
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </AppProvider>
   )
 }
