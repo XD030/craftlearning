@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Tag, Star, Check, Trash2, Upload, FolderOpen } from 'lucide-react'
+import { Plus, FileText, Tag, Star, Check, Trash2, Upload } from 'lucide-react'
 import type { Note } from '../../types'
 import { getNotesByCourse, createNote, deleteNote } from '../../db/notes'
 import { Button } from '../ui/Button'
@@ -22,41 +22,28 @@ export function NoteTab({ courseId }: NoteTabProps) {
   const [showNewNote, setShowNewNote] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const folderInputRef = useRef<HTMLInputElement>(null)
+  const importInputRef = useRef<HTMLInputElement>(null)
 
-  async function handleImportMd(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const content = await file.text()
-    const title = file.name.replace(/\.md$/i, '')
-    const note = await createNote({ courseId, title, content, tags: [], isHighlight: false, isReviewed: false })
-    setNotes(ns => [note, ...ns])
-    e.target.value = ''
-    navigate(`/notes/${note.id}`)
-  }
-
-  async function handleImportFolder(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     if (files.length === 0) return
 
     const mdFiles = files.filter(f => f.name.toLowerCase().endsWith('.md'))
     const imageFiles = files.filter(f => f.type.startsWith('image/'))
 
-    // Build image lookup: by full relative path AND by bare filename
+    // Build image lookup by relative path (folder import) and bare filename
     const imageMap: Record<string, string> = {}
     await Promise.all(imageFiles.map(file => new Promise<void>(resolve => {
       const reader = new FileReader()
       reader.onload = () => {
         const dataUrl = reader.result as string
-        imageMap[file.webkitRelativePath] = dataUrl
+        if (file.webkitRelativePath) imageMap[file.webkitRelativePath] = dataUrl
         imageMap[file.name] = dataUrl
       }
       reader.onloadend = () => resolve()
       reader.readAsDataURL(file)
     })))
 
-    // Resolve a src path relative to the .md file's directory
     function resolveImage(mdRelPath: string, src: string): string | undefined {
       const mdDir = mdRelPath.substring(0, mdRelPath.lastIndexOf('/') + 1)
       const combined = (mdDir + src.replace(/^\.\//, '')).split('/')
@@ -65,16 +52,16 @@ export function NoteTab({ courseId }: NoteTabProps) {
         if (p === '..') parts.pop()
         else if (p && p !== '.') parts.push(p)
       }
-      const resolved = parts.join('/')
-      return imageMap[resolved] ?? imageMap[src.replace(/^\.\//, '')] ?? imageMap[src.split('/').pop() ?? '']
+      return imageMap[parts.join('/')]
+        ?? imageMap[src.replace(/^\.\//, '')]
+        ?? imageMap[src.split('/').pop() ?? '']
     }
 
     let firstNote: Note | null = null
     for (const mdFile of mdFiles) {
       let content = await mdFile.text()
-      // Replace local image references with base64 data URLs
       content = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
-        if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:')) return match
+        if (/^(https?:|data:)/.test(src)) return match
         const dataUrl = resolveImage(mdFile.webkitRelativePath, src)
         return dataUrl ? `![${alt}](${dataUrl})` : match
       })
@@ -147,14 +134,16 @@ export function NoteTab({ courseId }: NoteTabProps) {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <input ref={fileInputRef} type="file" accept=".md" className="hidden" onChange={handleImportMd} />
-          <input ref={folderInputRef} type="file" className="hidden" onChange={handleImportFolder}
-            {...{ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>} />
-          <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()}>
-            <Upload size={14} /> 匯入 .md
-          </Button>
-          <Button size="sm" variant="secondary" onClick={() => folderInputRef.current?.click()}>
-            <FolderOpen size={14} /> 匯入資料夾
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".md,image/*"
+            multiple
+            className="hidden"
+            onChange={handleImport}
+          />
+          <Button size="sm" variant="secondary" onClick={() => importInputRef.current?.click()}>
+            <Upload size={14} /> 匯入
           </Button>
           <Button size="sm" onClick={() => setShowNewNote(true)}>
             <Plus size={14} /> 新增筆記

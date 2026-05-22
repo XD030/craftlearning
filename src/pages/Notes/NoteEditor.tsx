@@ -2,10 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ArrowLeft, Bold, List, Code, Quote, Star, Check, Tag, X } from 'lucide-react'
+import { ArrowLeft, Bold, List, Code, Quote, Star, Check, Tag, X, Pencil, Eye, Columns2 } from 'lucide-react'
 import type { Note } from '../../types'
 import { getNoteById, updateNote } from '../../db/notes'
 import { clsx } from '../../utils/clsx'
+
+type ViewMode = 'edit' | 'read' | 'split'
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value)
@@ -29,6 +31,9 @@ export function NoteEditor() {
   const [isReviewed, setIsReviewed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    (localStorage.getItem('noteViewMode') as ViewMode) ?? 'edit'
+  )
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const debouncedContent = useDebounce(content, 1000)
@@ -45,10 +50,17 @@ export function NoteEditor() {
           setTags(n.tags)
           setIsHighlight(n.isHighlight)
           setIsReviewed(n.isReviewed)
+          // Auto-open in read mode for imported notes with content
+          if (n.content && !localStorage.getItem('noteViewMode')) setViewMode('read')
         }
       })
     }
   }, [id])
+
+  function switchMode(m: ViewMode) {
+    setViewMode(m)
+    localStorage.setItem('noteViewMode', m)
+  }
 
   const save = useCallback(async (patch: Partial<Note>) => {
     if (!id) return
@@ -58,65 +70,51 @@ export function NoteEditor() {
     setSaving(false)
   }, [id])
 
-  // Auto-save on content/title change
   useEffect(() => {
     if (!note) return
     save({ content: debouncedContent, title: debouncedTitle })
   }, [debouncedContent, debouncedTitle]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function toggleHighlight() {
-    const next = !isHighlight
-    setIsHighlight(next)
-    await save({ isHighlight: next })
+    const next = !isHighlight; setIsHighlight(next); await save({ isHighlight: next })
   }
-
   async function toggleReviewed() {
-    const next = !isReviewed
-    setIsReviewed(next)
-    await save({ isReviewed: next })
+    const next = !isReviewed; setIsReviewed(next); await save({ isReviewed: next })
   }
-
   async function handleWeekBlur() {
     await save({ week: week ? parseInt(week) : undefined })
   }
-
   function addTag() {
     const t = tagInput.trim()
     if (!t || tags.includes(t)) { setTagInput(''); return }
-    const next = [...tags, t]
-    setTags(next)
-    setTagInput('')
-    save({ tags: next })
+    const next = [...tags, t]; setTags(next); setTagInput(''); save({ tags: next })
   }
-
   async function removeTag(t: string) {
-    const next = tags.filter(x => x !== t)
-    setTags(next)
-    await save({ tags: next })
+    const next = tags.filter(x => x !== t); setTags(next); await save({ tags: next })
   }
 
   function insertMarkdown(prefix: string, suffix = '') {
     const ta = textareaRef.current
     if (!ta) return
-    const start = ta.selectionStart
-    const end = ta.selectionEnd
+    const start = ta.selectionStart, end = ta.selectionEnd
     const selected = content.slice(start, end)
-    const newText = content.slice(0, start) + prefix + selected + suffix + content.slice(end)
-    setContent(newText)
+    setContent(content.slice(0, start) + prefix + selected + suffix + content.slice(end))
     setTimeout(() => {
       ta.focus()
       ta.setSelectionRange(start + prefix.length, start + prefix.length + selected.length)
     }, 0)
   }
 
-  // Drag image into editor
+  // Drag image — convert to base64 so it persists after page reload
   async function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'))
     if (!file) return
-    const url = URL.createObjectURL(file)
-    const mdImg = `\n![${file.name}](${url})\n`
-    setContent(c => c + mdImg)
+    const reader = new FileReader()
+    reader.onload = () => {
+      setContent(c => c + `\n![${file.name}](${reader.result as string})\n`)
+    }
+    reader.readAsDataURL(file)
   }
 
   if (!note) {
@@ -127,75 +125,135 @@ export function NoteEditor() {
     )
   }
 
+  const modeButtons: { mode: ViewMode; icon: typeof Pencil; label: string }[] = [
+    { mode: 'edit',  icon: Pencil,   label: '編輯' },
+    { mode: 'read',  icon: Eye,      label: '閱讀' },
+    { mode: 'split', icon: Columns2, label: '分割' },
+  ]
+
+  const markdownView = (
+    <div className="overflow-y-auto h-full">
+      <div className={clsx(
+        'px-10 py-8',
+        viewMode === 'read' && 'max-w-3xl mx-auto'
+      )}>
+        {viewMode === 'read' && (
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-6 leading-tight">{title}</h1>
+        )}
+        {content ? (
+          <div className={clsx(
+            'prose dark:prose-invert max-w-none',
+            'prose-headings:font-semibold prose-headings:text-slate-900 dark:prose-headings:text-white',
+            'prose-a:text-blue-600 dark:prose-a:text-blue-400',
+            'prose-code:text-pink-600 dark:prose-code:text-pink-400 prose-code:bg-slate-100 dark:prose-code:bg-slate-800 prose-code:px-1 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none',
+            'prose-pre:bg-slate-100 dark:prose-pre:bg-slate-800 prose-pre:rounded-xl',
+            'prose-blockquote:border-blue-400 prose-blockquote:text-slate-600 dark:prose-blockquote:text-slate-300',
+            'prose-img:rounded-xl prose-img:shadow-md',
+            'prose-table:text-sm',
+            viewMode === 'read' ? 'prose-base' : 'prose-sm',
+          )}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400 dark:text-slate-600 italic">空白筆記</p>
+        )}
+      </div>
+    </div>
+  )
+
+  const editView = (
+    <div className="flex-1 overflow-y-auto h-full">
+      <textarea
+        ref={textareaRef}
+        className="w-full h-full resize-none px-10 py-8 bg-transparent text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none font-mono leading-relaxed"
+        placeholder="開始寫 Markdown 筆記…"
+        value={content}
+        onChange={e => setContent(e.target.value)}
+        onDrop={handleDrop}
+        onDragOver={e => e.preventDefault()}
+      />
+    </div>
+  )
+
   return (
     <div className="h-full flex flex-col bg-white dark:bg-slate-900">
       {/* Top bar */}
-      <div className="flex items-center gap-4 px-6 py-3 border-b border-slate-200 dark:border-slate-700">
+      <div className="flex items-center gap-3 px-6 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+          className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex-shrink-0"
         >
-          <ArrowLeft size={14} />
+          <ArrowLeft size={16} />
         </button>
 
-        <input
-          className="flex-1 text-lg font-semibold bg-transparent text-slate-900 dark:text-white focus:outline-none placeholder-slate-300 dark:placeholder-slate-600"
-          placeholder="筆記標題"
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-        />
+        {viewMode === 'read' ? (
+          <span className="flex-1 text-lg font-semibold text-slate-900 dark:text-white truncate">{title}</span>
+        ) : (
+          <input
+            className="flex-1 text-lg font-semibold bg-transparent text-slate-900 dark:text-white focus:outline-none placeholder-slate-300 dark:placeholder-slate-600"
+            placeholder="筆記標題"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+          />
+        )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Mode switcher */}
+          <div className="flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 mr-1">
+            {modeButtons.map(({ mode, icon: Icon, label }) => (
+              <button
+                key={mode}
+                onClick={() => switchMode(mode)}
+                title={label}
+                className={clsx(
+                  'p-1.5 rounded-md transition-colors',
+                  viewMode === mode
+                    ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                )}
+              >
+                <Icon size={14} />
+              </button>
+            ))}
+          </div>
+
           {saving ? (
-            <span className="text-xs text-slate-400 dark:text-slate-500">儲存中…</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500 mr-1">儲存中…</span>
           ) : lastSaved ? (
-            <span className="text-xs text-slate-400 dark:text-slate-500">已自動儲存</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500 mr-1">已自動儲存</span>
           ) : null}
 
           <button
             onClick={toggleHighlight}
-            className={clsx(
-              'p-1.5 rounded-lg transition-colors',
-              isHighlight
-                ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/30'
-                : 'text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+            className={clsx('p-1.5 rounded-lg transition-colors',
+              isHighlight ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/30' : 'text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
             )}
             title="標記重點"
           >
-            <Star size={16} fill={isHighlight ? 'currentColor' : 'none'} />
+            <Star size={15} fill={isHighlight ? 'currentColor' : 'none'} />
           </button>
-
           <button
             onClick={toggleReviewed}
-            className={clsx(
-              'p-1.5 rounded-lg transition-colors',
-              isReviewed
-                ? 'text-green-500 bg-green-50 dark:bg-green-900/30'
-                : 'text-slate-400 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
+            className={clsx('p-1.5 rounded-lg transition-colors',
+              isReviewed ? 'text-green-500 bg-green-50 dark:bg-green-900/30' : 'text-slate-400 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
             )}
             title="標記已整理"
           >
-            <Check size={16} />
+            <Check size={15} />
           </button>
         </div>
       </div>
 
       {/* Meta bar */}
-      <div className="flex items-center gap-4 px-6 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex-wrap">
+      <div className="flex items-center gap-4 px-6 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex-wrap flex-shrink-0">
         <div className="flex items-center gap-2">
           <label className="text-xs text-slate-500 dark:text-slate-400">週次</label>
           <input
-            type="number"
-            min="1"
-            max="20"
-            placeholder="—"
-            value={week}
-            onChange={e => setWeek(e.target.value)}
-            onBlur={handleWeekBlur}
+            type="number" min="1" max="20" placeholder="—"
+            value={week} onChange={e => setWeek(e.target.value)} onBlur={handleWeekBlur}
             className="w-14 text-xs rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
-
         <div className="flex items-center gap-2 flex-wrap">
           <Tag size={12} className="text-slate-400" />
           {tags.map(t => (
@@ -206,8 +264,7 @@ export function NoteEditor() {
           ))}
           <input
             className="text-xs bg-transparent border-none outline-none text-slate-600 dark:text-slate-300 placeholder-slate-400 w-20"
-            placeholder="+ 標籤"
-            value={tagInput}
+            placeholder="+ 標籤" value={tagInput}
             onChange={e => setTagInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag() } }}
             onBlur={addTag}
@@ -215,50 +272,38 @@ export function NoteEditor() {
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-1 px-6 py-2 border-b border-slate-100 dark:border-slate-800">
-        {[
-          { icon: Bold, action: () => insertMarkdown('**', '**'), title: '粗體' },
-          { icon: List, action: () => insertMarkdown('\n- '), title: '列表' },
-          { icon: Code, action: () => insertMarkdown('`', '`'), title: '程式碼' },
-          { icon: Quote, action: () => insertMarkdown('\n> '), title: '引用' },
-        ].map(({ icon: Icon, action, title: t }) => (
-          <button
-            key={t}
-            onClick={action}
-            title={t}
-            className="p-1.5 rounded text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-          >
-            <Icon size={15} />
-          </button>
-        ))}
-      </div>
-
-      {/* Editor / Preview */}
-      <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 overflow-y-auto">
-          <textarea
-            ref={textareaRef}
-            className="w-full h-full resize-none p-6 bg-transparent text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none font-mono leading-relaxed"
-            placeholder="開始寫 Markdown 筆記…"
-            value={content}
-            onChange={e => setContent(e.target.value)}
-            onDrop={handleDrop}
-            onDragOver={e => e.preventDefault()}
-          />
+      {/* Markdown toolbar — only in edit / split mode */}
+      {viewMode !== 'read' && (
+        <div className="flex items-center gap-1 px-6 py-1.5 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
+          {[
+            { icon: Bold,  action: () => insertMarkdown('**', '**'), title: '粗體' },
+            { icon: List,  action: () => insertMarkdown('\n- '),      title: '列表' },
+            { icon: Code,  action: () => insertMarkdown('`', '`'),   title: '行內程式碼' },
+            { icon: Quote, action: () => insertMarkdown('\n> '),      title: '引用' },
+          ].map(({ icon: Icon, action, title: t }) => (
+            <button key={t} onClick={action} title={t}
+              className="p-1.5 rounded text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <Icon size={14} />
+            </button>
+          ))}
         </div>
+      )}
 
-        <div className="w-px bg-slate-200 dark:bg-slate-700" />
-
-        <div className="flex-1 overflow-y-auto p-6">
-          {content ? (
-            <div className="prose prose-sm dark:prose-invert max-w-none prose-pre:bg-slate-100 dark:prose-pre:bg-slate-800">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      {/* Content area */}
+      <div className="flex-1 overflow-hidden flex">
+        {viewMode === 'edit' && editView}
+        {viewMode === 'read' && markdownView}
+        {viewMode === 'split' && (
+          <>
+            <div className="flex-1 border-r border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+              {editView}
             </div>
-          ) : (
-            <p className="text-sm text-slate-400 dark:text-slate-600 italic">預覽區</p>
-          )}
-        </div>
+            <div className="flex-1 overflow-hidden">
+              {markdownView}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
