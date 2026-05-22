@@ -132,29 +132,26 @@ export function NoteEditor() {
   ]
 
   const markdownView = (
-    <div className="overflow-y-auto h-full">
+    <div className={clsx('overflow-y-auto h-full', viewMode === 'read' && 'bg-[#1e1e1e]')}>
       <div className={clsx(
-        'px-10 py-8',
-        viewMode === 'read' && 'max-w-3xl mx-auto'
+        viewMode === 'read'
+          ? 'px-16 py-12 max-w-[740px] mx-auto'
+          : 'px-10 py-8'
       )}>
         {viewMode === 'read' && (
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-6 leading-tight">{title}</h1>
+          <h1 className="text-[1.85rem] font-bold text-white mb-8 pb-5 border-b border-[#383838] leading-tight tracking-[-0.02em]">{title}</h1>
         )}
         {content ? (
           <div className={clsx(
-            'prose dark:prose-invert max-w-none dark:text-white',
-            'prose-headings:font-semibold',
-            'prose-code:text-pink-600 dark:prose-code:text-pink-400 prose-code:bg-slate-100 dark:prose-code:bg-slate-800 prose-code:px-1 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none',
-            'prose-pre:bg-slate-100 dark:prose-pre:bg-slate-800 prose-pre:rounded-xl',
-            'prose-blockquote:border-blue-400',
-            'prose-img:rounded-xl prose-img:shadow-md',
-            'prose-table:text-sm',
-            viewMode === 'read' ? 'prose-base' : 'prose-sm',
+            'prose max-w-none',
+            viewMode === 'read'
+              ? 'text-[#d4d4d4] prose-headings:text-white prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-a:text-[#a78bfa] prose-a:no-underline prose-strong:text-white prose-em:text-[#d4d4d4] prose-code:text-[#e06c75] prose-code:bg-[#2d2d2d] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-[0.875em] prose-code:before:content-none prose-code:after:content-none prose-pre:bg-[#282828] prose-pre:border prose-pre:border-[#383838] prose-pre:rounded-lg prose-pre:shadow-xl prose-blockquote:border-l-4 prose-blockquote:border-[#7f6df2] prose-blockquote:not-italic prose-blockquote:text-[#999999] prose-blockquote:pl-5 prose-blockquote:py-0.5 prose-img:rounded-xl prose-img:shadow-2xl prose-table:text-sm prose-th:text-white prose-th:font-semibold prose-hr:border-[#383838] prose-li:marker:text-[#666666] prose-base leading-[1.8]'
+              : 'dark:prose-invert dark:text-white prose-headings:font-semibold prose-code:text-pink-600 dark:prose-code:text-pink-400 prose-code:bg-slate-100 dark:prose-code:bg-slate-800 prose-code:px-1 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:bg-slate-100 dark:prose-pre:bg-slate-800 prose-pre:rounded-xl prose-blockquote:border-blue-400 prose-img:rounded-xl prose-img:shadow-md prose-table:text-sm prose-sm'
           )}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
           </div>
         ) : (
-          <p className="text-sm text-slate-400 dark:text-slate-600 italic">空白筆記</p>
+          <p className={clsx('text-sm italic', viewMode === 'read' ? 'text-[#555555]' : 'text-slate-400 dark:text-slate-600')}>空白筆記</p>
         )}
       </div>
     </div>
@@ -175,9 +172,9 @@ export function NoteEditor() {
   )
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-slate-900">
+    <div className={clsx('h-full flex flex-col', viewMode === 'read' ? 'bg-[#1e1e1e]' : 'bg-white dark:bg-slate-900')}>
       {/* Top bar */}
-      <div className="flex items-center gap-3 px-6 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+      <div className={clsx('flex items-center gap-3 px-6 py-3 border-b flex-shrink-0', viewMode === 'read' ? 'border-[#383838]' : 'border-slate-200 dark:border-slate-700')}>
         <button
           onClick={() => navigate(-1)}
           className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex-shrink-0"
@@ -244,7 +241,7 @@ export function NoteEditor() {
       </div>
 
       {/* Meta bar */}
-      <div className="flex items-center gap-4 px-6 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex-wrap flex-shrink-0">
+      <div className={clsx('flex items-center gap-4 px-6 py-2 border-b flex-wrap flex-shrink-0', viewMode === 'read' ? 'border-[#383838] bg-[#1e1e1e]' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50')}>
         <div className="flex items-center gap-2">
           <label className="text-xs text-slate-500 dark:text-slate-400">週次</label>
           <input
