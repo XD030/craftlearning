@@ -142,12 +142,11 @@ export function NoteEditor() {
         )}
         {content ? (
           <div className={clsx(
-            'prose dark:prose-invert max-w-none',
-            'prose-headings:font-semibold prose-headings:text-slate-900 dark:prose-headings:text-white',
-            'prose-a:text-blue-600 dark:prose-a:text-blue-400',
+            'prose dark:prose-invert max-w-none dark:text-white',
+            'prose-headings:font-semibold',
             'prose-code:text-pink-600 dark:prose-code:text-pink-400 prose-code:bg-slate-100 dark:prose-code:bg-slate-800 prose-code:px-1 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none',
             'prose-pre:bg-slate-100 dark:prose-pre:bg-slate-800 prose-pre:rounded-xl',
-            'prose-blockquote:border-blue-400 prose-blockquote:text-slate-600 dark:prose-blockquote:text-slate-300',
+            'prose-blockquote:border-blue-400',
             'prose-img:rounded-xl prose-img:shadow-md',
             'prose-table:text-sm',
             viewMode === 'read' ? 'prose-base' : 'prose-sm',

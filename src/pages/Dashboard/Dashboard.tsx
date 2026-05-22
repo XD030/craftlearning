@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Calendar, Clock, BookMarked, FileText, CheckSquare } from 'lucide-react'
+import { Calendar, Clock, BookMarked } from 'lucide-react'
 import type { Task, Course, GroupProject } from '../../types'
 import { getUpcomingTasks } from '../../db/tasks'
 import { getUpcomingProjects } from '../../db/projects'
 import { getCoursesBySemester } from '../../db/courses'
 import { getUnreviewedCountByCourse, createNote } from '../../db/notes'
-import { createTask } from '../../db/tasks'
 import { useApp } from '../../contexts/AppContext'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
-import { TaskForm } from '../../components/tasks/TaskForm'
 import { clsx } from '../../utils/clsx'
 
 const TASK_TYPE_LABELS: Record<Task['type'], string> = {
@@ -57,10 +55,8 @@ export function Dashboard() {
   const [courses, setCourses] = useState<Course[]>([])
   const [unreviewedMap, setUnreviewedMap] = useState<Record<string, number>>({})
   const [showNewNote, setShowNewNote] = useState(false)
-  const [showNewTask, setShowNewTask] = useState(false)
   const [newNoteTitle, setNewNoteTitle] = useState('')
   const [selectedCourseId, setSelectedCourseId] = useState('')
-  const [taskCourseId, setTaskCourseId] = useState('')
 
   useEffect(() => {
     getUpcomingTasks(14).then(setTasks)
@@ -70,7 +66,6 @@ export function Dashboard() {
         setCourses(cs)
         if (cs.length > 0) {
           setSelectedCourseId(cs[0].id)
-          setTaskCourseId(cs[0].id)
         }
         const counts = await Promise.all(cs.map(c => getUnreviewedCountByCourse(c.id)))
         const map: Record<string, number> = {}
@@ -105,13 +100,6 @@ export function Dashboard() {
     setShowNewNote(false)
     setNewNoteTitle('')
     navigate(`/notes/${note.id}`)
-  }
-
-  async function handleCreateTask(data: Omit<Task, 'id' | 'createdAt'>) {
-    await createTask(data)
-    setShowNewTask(false)
-    getUpcomingTasks(14).then(setTasks)
-    getUpcomingProjects(14).then(setProjects)
   }
 
   const courseMap = Object.fromEntries(courses.map(c => [c.id, c]))
@@ -266,20 +254,6 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* 快速動作 */}
-      <div className="flex gap-3 flex-wrap">
-        <Button onClick={() => setShowNewNote(true)}>
-          <FileText size={15} /> 新增筆記
-          <kbd className="text-xs opacity-60 font-mono ml-1">⌘N</kbd>
-        </Button>
-        <Button variant="secondary" onClick={() => setShowNewTask(true)}>
-          <CheckSquare size={15} /> 新增作業/考試
-        </Button>
-        <Button variant="secondary" onClick={() => navigate('/courses')}>
-          <Plus size={15} /> 新增課程
-        </Button>
-      </div>
-
       {/* 快速新增筆記 */}
       <Modal open={showNewNote} onClose={() => setShowNewNote(false)} title="快速新增筆記" size="sm">
         {courses.length === 0 ? (
@@ -313,28 +287,6 @@ export function Dashboard() {
         )}
       </Modal>
 
-      {/* 快速新增作業/考試 */}
-      <Modal open={showNewTask} onClose={() => setShowNewTask(false)} title="新增作業/考試" size="md">
-        {courses.length === 0 ? (
-          <NoCourseNotice onClose={() => setShowNewTask(false)} onGo={() => { setShowNewTask(false); navigate('/courses') }} />
-        ) : (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">選擇課程</label>
-              <select className="input" value={taskCourseId} onChange={e => setTaskCourseId(e.target.value)}>
-                {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            {taskCourseId && (
-              <TaskForm
-                courseId={taskCourseId}
-                onSubmit={handleCreateTask}
-                onCancel={() => setShowNewTask(false)}
-              />
-            )}
-          </div>
-        )}
-      </Modal>
     </div></div>
   )
 }

@@ -142,9 +142,6 @@ export function NoteTab({ courseId }: NoteTabProps) {
             className="hidden"
             onChange={handleImport}
           />
-          <Button size="sm" variant="secondary" onClick={() => importInputRef.current?.click()}>
-            <Upload size={14} /> 匯入
-          </Button>
           <Button size="sm" onClick={() => setShowNewNote(true)}>
             <Plus size={14} /> 新增筆記
           </Button>
@@ -231,6 +228,17 @@ export function NoteTab({ courseId }: NoteTabProps) {
           <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={() => setShowNewNote(false)}>取消</Button>
             <Button onClick={handleCreate} disabled={!newTitle.trim()}>建立並開始編輯</Button>
+          </div>
+          <div className="relative flex items-center">
+            <div className="flex-1 border-t border-slate-200 dark:border-slate-700" />
+            <span className="px-3 text-xs text-slate-400 dark:text-slate-500">或</span>
+            <div className="flex-1 border-t border-slate-200 dark:border-slate-700" />
+          </div>
+          <div>
+            <Button variant="secondary" className="w-full justify-center" onClick={() => importInputRef.current?.click()}>
+              <Upload size={14} /> 匯入 .md 檔案或圖片
+            </Button>
+            <p className="text-xs text-slate-400 dark:text-slate-500 text-center mt-1.5">支援多個 .md 與圖片一起選取</p>
           </div>
         </div>
       </Modal>
