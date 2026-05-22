@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Tag, Star, Check, Trash2 } from 'lucide-react'
+import { Plus, FileText, Tag, Star, Check, Trash2, Upload } from 'lucide-react'
 import type { Note } from '../../types'
 import { getNotesByCourse, createNote, deleteNote } from '../../db/notes'
 import { Button } from '../ui/Button'
@@ -22,6 +22,18 @@ export function NoteTab({ courseId }: NoteTabProps) {
   const [showNewNote, setShowNewNote] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleImportMd(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const content = await file.text()
+    const title = file.name.replace(/\.md$/i, '')
+    const note = await createNote({ courseId, title, content, tags: [], isHighlight: false, isReviewed: false })
+    setNotes(ns => [note, ...ns])
+    e.target.value = ''
+    navigate(`/notes/${note.id}`)
+  }
 
   useEffect(() => {
     getNotesByCourse(courseId).then(setNotes)
@@ -81,9 +93,15 @@ export function NoteTab({ courseId }: NoteTabProps) {
             </button>
           ))}
         </div>
-        <Button size="sm" onClick={() => setShowNewNote(true)}>
-          <Plus size={14} /> 新增筆記
-        </Button>
+        <div className="flex items-center gap-2">
+          <input ref={fileInputRef} type="file" accept=".md" className="hidden" onChange={handleImportMd} />
+          <Button size="sm" variant="secondary" onClick={() => fileInputRef.current?.click()}>
+            <Upload size={14} /> 匯入 .md
+          </Button>
+          <Button size="sm" onClick={() => setShowNewNote(true)}>
+            <Plus size={14} /> 新增筆記
+          </Button>
+        </div>
       </div>
 
       {notes.length === 0 ? (
