@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Edit2, Trash2, Check, Download, Upload, AlertTriangle } from 'lucide-react'
+import { Plus, Edit2, Trash2, Check, Download, Upload, AlertTriangle, Gem, RefreshCw } from 'lucide-react'
 import type { Semester } from '../../types'
 import { createSemester, updateSemester, deleteSemester } from '../../db/semesters'
+import { getCoursesBySemester } from '../../db/courses'
+import { getNotesByCourse } from '../../db/notes'
 import { db } from '../../db/database'
 import { useApp } from '../../contexts/AppContext'
 import { Button } from '../../components/ui/Button'
@@ -75,6 +77,8 @@ export function Settings() {
   const [storageUsage, setStorageUsage] = useState<{ usage: number; quota: number } | null>(null)
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [vaultSyncing, setVaultSyncing] = useState(false)
+  const [vaultStatus, setVaultStatus] = useState<{ ok: boolean; msg: string } | null>(null)
   const importRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -178,6 +182,77 @@ export function Settings() {
     window.location.reload()
   }
 
+  async function handleObsidianSync() {
+    if (!('showDirectoryPicker' in window)) {
+      setVaultStatus({ ok: false, msg: '您的瀏覽器不支援此功能，請使用 Chrome 或 Edge' })
+      return
+    }
+    if (!state.activeSemesterId) {
+      setVaultStatus({ ok: false, msg: '請先在學期管理中設定一個作用中學期' })
+      return
+    }
+
+    setVaultSyncing(true)
+    setVaultStatus(null)
+
+    try {
+      // Let user pick their Obsidian vault root
+      const vaultHandle = await (window as Window & { showDirectoryPicker: (o?: object) => Promise<FileSystemDirectoryHandle> })
+        .showDirectoryPicker({ mode: 'readwrite' })
+
+      // Write into vault/craftlearning/ so we don't clutter their vault root
+      const rootDir = await vaultHandle.getDirectoryHandle('craftlearning', { create: true })
+
+      const courses = await getCoursesBySemester(state.activeSemesterId)
+      let total = 0
+
+      for (const course of courses) {
+        const notes = await getNotesByCourse(course.id)
+        if (notes.length === 0) continue
+
+        const safeCourse = course.name.replace(/[<>:"/\\|?*]/g, '_').trim()
+        const courseDir = await rootDir.getDirectoryHandle(safeCourse, { create: true })
+
+        for (const note of notes) {
+          const weekLabel = note.week != null ? `Week_${note.week}` : '未分類'
+          const weekDir = await courseDir.getDirectoryHandle(weekLabel, { create: true })
+          const safeTitle = (note.title.replace(/[<>:"/\\|?*]/g, '_').trim()) || 'untitled'
+
+          // YAML frontmatter — readable by Obsidian Dataview, Properties, etc.
+          const tagBlock = note.tags.length > 0
+            ? `tags:\n${note.tags.map(t => `  - ${t}`).join('\n')}`
+            : 'tags: []'
+          const fm = [
+            '---',
+            `title: "${note.title.replace(/"/g, '\\"')}"`,
+            `course: "${course.name.replace(/"/g, '\\"')}"`,
+            `week: ${note.week ?? ''}`,
+            tagBlock,
+            `highlight: ${note.isHighlight}`,
+            `reviewed: ${note.isReviewed}`,
+            `created: ${note.createdAt.slice(0, 10)}`,
+            '---',
+            '',
+          ].join('\n')
+
+          const fileHandle = await weekDir.getFileHandle(`${safeTitle}.md`, { create: true })
+          const writable = await fileHandle.createWritable()
+          await writable.write(fm + note.content)
+          await writable.close()
+          total++
+        }
+      }
+
+      setVaultStatus({ ok: true, msg: `成功同步 ${total} 則筆記到 Obsidian 保險庫 ✓` })
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        setVaultStatus({ ok: false, msg: `同步失敗：${err.message}` })
+      }
+    } finally {
+      setVaultSyncing(false)
+    }
+  }
+
   return (
     <div className="h-full overflow-y-auto"><div className="p-8 max-w-2xl">
       <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-8">設定</h1>
@@ -218,6 +293,46 @@ export function Settings() {
         <div className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3">
           <p className="text-sm text-slate-700 dark:text-slate-200">深色模式</p>
           <span className="text-sm text-slate-500 dark:text-slate-400">使用右上角按鈕切換</span>
+        </div>
+      </section>
+
+      {/* Obsidian 整合 */}
+      <section className="mb-10">
+        <div className="flex items-center gap-2 mb-4">
+          <Gem size={16} className="text-violet-500" />
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Obsidian 整合</h2>
+        </div>
+        <div className="rounded-xl border border-violet-200 dark:border-violet-800/50 bg-violet-50/50 dark:bg-violet-900/10 p-5 space-y-4">
+          <div>
+            <p className="text-sm text-slate-700 dark:text-slate-200 font-medium mb-1">同步筆記到 Obsidian 保險庫</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              選擇您的 Obsidian vault 資料夾後，所有筆記將以 <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-pink-600 dark:text-pink-400 text-[0.8em]">.md</code> 格式寫入：
+            </p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5 font-mono">
+              vault / craftlearning / 課程名稱 / Week_N / 筆記標題.md
+            </p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+              每個檔案包含 YAML frontmatter（週次、標籤、重點標記），可搭配 Dataview 外掛查詢。
+            </p>
+          </div>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-slate-400 dark:text-slate-500">需要 Chrome 或 Edge 瀏覽器</p>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleObsidianSync}
+              disabled={vaultSyncing}
+              className="border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/30"
+            >
+              <RefreshCw size={13} className={vaultSyncing ? 'animate-spin' : ''} />
+              {vaultSyncing ? '同步中…' : '選擇保險庫並同步'}
+            </Button>
+          </div>
+          {vaultStatus && (
+            <p className={`text-xs font-medium ${vaultStatus.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+              {vaultStatus.msg}
+            </p>
+          )}
         </div>
       </section>
 
