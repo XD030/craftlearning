@@ -14,3 +14,149 @@
     @apply w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors;
   }
 }
+
+/* ─── Obsidian-style read mode ───────────────────────────────────── */
+.obsidian-prose {
+  color: #d4d4d4;
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+/* Headings */
+.obsidian-prose h1,
+.obsidian-prose h2,
+.obsidian-prose h3,
+.obsidian-prose h4,
+.obsidian-prose h5,
+.obsidian-prose h6 {
+  color: #ffffff;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 1.8em;
+  margin-bottom: 0.5em;
+}
+.obsidian-prose h1 { font-size: 1.75em; margin-top: 0; }
+.obsidian-prose h2 { font-size: 1.35em; border-bottom: 1px solid #333333; padding-bottom: 0.3em; }
+.obsidian-prose h3 { font-size: 1.15em; }
+.obsidian-prose h4 { font-size: 1em; color: #bbbbbb; }
+
+/* Paragraphs */
+.obsidian-prose p {
+  margin: 0 0 1.2em;
+  color: #d4d4d4;
+}
+
+/* Links */
+.obsidian-prose a {
+  color: #a78bfa;
+  text-decoration: none;
+}
+.obsidian-prose a:hover {
+  color: #c4b5fd;
+  text-decoration: underline;
+}
+
+/* Bold / Italic */
+.obsidian-prose strong { color: #ffffff; font-weight: 700; }
+.obsidian-prose em     { color: #d4d4d4; font-style: italic; }
+.obsidian-prose del    { color: #666666; }
+
+/* Inline code */
+.obsidian-prose :not(pre) > code {
+  color: #e06c75;
+  background: #2a2a2a;
+  padding: 0.15em 0.45em;
+  border-radius: 4px;
+  font-size: 0.875em;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+}
+.obsidian-prose :not(pre) > code::before,
+.obsidian-prose :not(pre) > code::after { content: none; }
+
+/* Fenced code blocks */
+.obsidian-prose pre {
+  background: #1a1a1a;
+  border: 1px solid #333333;
+  border-radius: 8px;
+  padding: 1.1em 1.4em;
+  margin: 1.5em 0;
+  overflow-x: auto;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+}
+.obsidian-prose pre code {
+  color: #d4d4d4;
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.875em;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+}
+
+/* Blockquotes */
+.obsidian-prose blockquote {
+  border-left: 3px solid #7f6df2;
+  background: transparent;
+  margin: 1.2em 0;
+  padding: 0.2em 0 0.2em 1.2em;
+  font-style: normal;
+  color: #999999;
+}
+.obsidian-prose blockquote p { color: #999999; margin: 0; }
+
+/* Lists */
+.obsidian-prose ul,
+.obsidian-prose ol {
+  padding-left: 1.6em;
+  margin: 0.75em 0;
+  color: #d4d4d4;
+}
+.obsidian-prose li          { margin: 0.3em 0; }
+.obsidian-prose li > ul,
+.obsidian-prose li > ol     { margin: 0.2em 0; }
+.obsidian-prose ul > li::marker { color: #666; }
+.obsidian-prose ol > li::marker { color: #888; }
+
+/* Task-list checkboxes (remark-gfm) */
+.obsidian-prose input[type="checkbox"] {
+  accent-color: #7f6df2;
+  margin-right: 0.45em;
+  cursor: default;
+}
+
+/* Tables */
+.obsidian-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+  margin: 1.5em 0;
+}
+.obsidian-prose thead       { border-bottom: 2px solid #333333; }
+.obsidian-prose th {
+  color: #ffffff;
+  font-weight: 600;
+  padding: 0.55em 1em;
+  text-align: left;
+  background: #242424;
+}
+.obsidian-prose td {
+  color: #d4d4d4;
+  padding: 0.55em 1em;
+  border-bottom: 1px solid #2a2a2a;
+}
+.obsidian-prose tr:last-child td { border-bottom: none; }
+
+/* Horizontal rule */
+.obsidian-prose hr {
+  border: none;
+  border-top: 1px solid #333333;
+  margin: 2em 0;
+}
+
+/* Images */
+.obsidian-prose img {
+  border-radius: 8px;
+  box-shadow: 0 6px 28px rgba(0,0,0,0.5);
+  max-width: 100%;
+  margin: 1.5em auto;
+  display: block;
+}
