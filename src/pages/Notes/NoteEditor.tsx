@@ -131,8 +131,37 @@ export function NoteEditor() {
     { mode: 'split', icon: Columns2, label: '分割' },
   ]
 
+  // Custom image renderer — gracefully handle broken / missing local images
+  const mdComponents = {
+    img({ src, alt }: { src?: string; alt?: string }) {
+      return (
+        <span className="block my-6">
+          <img
+            src={src ?? ''}
+            alt={alt ?? ''}
+            style={{ maxWidth: '100%', borderRadius: 8, boxShadow: '0 6px 28px rgba(0,0,0,0.45)', display: 'block', margin: '0 auto' }}
+            onError={e => {
+              const el = e.currentTarget
+              el.style.display = 'none'
+              const ph = el.nextElementSibling as HTMLElement | null
+              if (ph) ph.style.display = 'flex'
+            }}
+          />
+          <span
+            style={{ display: 'none', alignItems: 'center', justifyContent: 'center', gap: 8,
+              background: '#2a2a2a', border: '1px solid #383838', borderRadius: 8,
+              padding: '1.25em 1.5em', color: '#666', fontSize: '0.875em' }}
+          >
+            🖼&nbsp;{alt || '圖片'}&nbsp;<span style={{ color: '#444' }}>(路徑未找到，請重新匯入含圖片的資料夾)</span>
+          </span>
+        </span>
+      )
+    }
+  }
+
   const markdownView = (
-    <div className={clsx('overflow-y-auto h-full', viewMode === 'read' && 'bg-[#1e1e1e]')}>
+    // w-full is critical — without it the div won't fill the flex container and mx-auto can't centre
+    <div className={clsx('overflow-y-auto h-full w-full', viewMode === 'read' && 'bg-[#1e1e1e]')}>
       <div className={clsx(
         viewMode === 'read'
           ? 'px-16 py-12 max-w-[740px] mx-auto'
@@ -147,7 +176,7 @@ export function NoteEditor() {
               ? 'obsidian-prose'
               : 'prose prose-sm dark:prose-invert max-w-none dark:text-white prose-headings:font-semibold prose-code:before:content-none prose-code:after:content-none'
           )}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{content}</ReactMarkdown>
           </div>
         ) : (
           <p className={clsx('text-sm italic', viewMode === 'read' ? 'text-[#555]' : 'text-slate-400 dark:text-slate-600')}>空白筆記</p>
@@ -176,13 +205,13 @@ export function NoteEditor() {
       <div className={clsx('flex items-center gap-3 px-6 py-3 border-b flex-shrink-0', viewMode === 'read' ? 'border-[#383838]' : 'border-slate-200 dark:border-slate-700')}>
         <button
           onClick={() => navigate(-1)}
-          className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors flex-shrink-0"
+          className={clsx('transition-colors flex-shrink-0', viewMode === 'read' ? 'text-[#888] hover:text-[#bbb]' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200')}
         >
           <ArrowLeft size={16} />
         </button>
 
         {viewMode === 'read' ? (
-          <span className="flex-1 text-lg font-semibold text-slate-900 dark:text-white truncate">{title}</span>
+          <span className="flex-1 text-sm text-[#666] truncate">{title}</span>
         ) : (
           <input
             className="flex-1 text-lg font-semibold bg-transparent text-slate-900 dark:text-white focus:outline-none placeholder-slate-300 dark:placeholder-slate-600"
@@ -194,7 +223,7 @@ export function NoteEditor() {
 
         <div className="flex items-center gap-1 flex-shrink-0">
           {/* Mode switcher */}
-          <div className="flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 mr-1">
+          <div className={clsx('flex rounded-lg p-0.5 mr-1', viewMode === 'read' ? 'bg-[#2a2a2a]' : 'bg-slate-100 dark:bg-slate-800')}>
             {modeButtons.map(({ mode, icon: Icon, label }) => (
               <button
                 key={mode}
@@ -202,9 +231,13 @@ export function NoteEditor() {
                 title={label}
                 className={clsx(
                   'p-1.5 rounded-md transition-colors',
-                  viewMode === mode
-                    ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                  viewMode === 'read'
+                    ? mode === 'read'
+                      ? 'bg-[#3a3a3a] text-white shadow-sm'
+                      : 'text-[#666] hover:text-[#aaa]'
+                    : viewMode === mode
+                      ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-slate-100 shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                 )}
               >
                 <Icon size={14} />
@@ -212,11 +245,11 @@ export function NoteEditor() {
             ))}
           </div>
 
-          {saving ? (
+          {viewMode !== 'read' && (saving ? (
             <span className="text-xs text-slate-400 dark:text-slate-500 mr-1">儲存中…</span>
           ) : lastSaved ? (
             <span className="text-xs text-slate-400 dark:text-slate-500 mr-1">已自動儲存</span>
-          ) : null}
+          ) : null)}
 
           <button
             onClick={toggleHighlight}
@@ -239,8 +272,8 @@ export function NoteEditor() {
         </div>
       </div>
 
-      {/* Meta bar */}
-      <div className={clsx('flex items-center gap-4 px-6 py-2 border-b flex-wrap flex-shrink-0', viewMode === 'read' ? 'border-[#383838] bg-[#1e1e1e]' : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50')}>
+      {/* Meta bar — hidden in read mode to keep the reading surface clean */}
+      {viewMode !== 'read' && <div className={clsx('flex items-center gap-4 px-6 py-2 border-b flex-wrap flex-shrink-0', 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50')}>
         <div className="flex items-center gap-2">
           <label className="text-xs text-slate-500 dark:text-slate-400">週次</label>
           <input
@@ -265,7 +298,7 @@ export function NoteEditor() {
             onBlur={addTag}
           />
         </div>
-      </div>
+      </div>}
 
       {/* Markdown toolbar — only in edit / split mode */}
       {viewMode !== 'read' && (
