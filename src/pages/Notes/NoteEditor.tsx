@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 import { ArrowLeft, Bold, List, Code, Quote, Star, Check, Tag, X, Pencil, Eye, Columns2 } from 'lucide-react'
 import type { Note } from '../../types'
 import { getNoteById, updateNote } from '../../db/notes'
@@ -131,7 +134,7 @@ export function NoteEditor() {
     { mode: 'split', icon: Columns2, label: '分割' },
   ]
 
-  // Custom image renderer — gracefully handle broken / missing local images
+  // Custom renderers — images with error fallback, links opening in new tab
   const mdComponents = {
     img({ src, alt }: { src?: string; alt?: string }) {
       return (
@@ -156,16 +159,32 @@ export function NoteEditor() {
           </span>
         </span>
       )
-    }
+    },
+    a({ href, children }: { href?: string; children?: React.ReactNode }) {
+      const isExternal = /^https?:\/\//.test(href ?? '')
+      return (
+        <a
+          href={href ?? '#'}
+          target={isExternal ? '_blank' : undefined}
+          rel={isExternal ? 'noopener noreferrer' : undefined}
+          onClick={!isExternal ? (e: React.MouseEvent) => { e.preventDefault() } : undefined}
+        >
+          {children}
+        </a>
+      )
+    },
   }
 
   const markdownView = (
-    // w-full is critical — without it the div won't fill the flex container and mx-auto can't centre
-    <div className={clsx('overflow-y-auto h-full w-full', viewMode === 'read' && 'bg-[#1e1e1e]')}>
+    // Outer: scroll container, flex so we can use justify-center for reliable centering
+    <div className={clsx(
+      'overflow-y-auto h-full w-full flex flex-col',
+      viewMode === 'read' ? 'bg-[#1e1e1e] items-center' : ''
+    )}>
       <div className={clsx(
         viewMode === 'read'
-          ? 'px-16 py-12 max-w-[740px] mx-auto'
-          : 'px-10 py-8'
+          ? 'w-full max-w-[760px] px-10 py-12'
+          : 'w-full px-10 py-8'
       )}>
         {viewMode === 'read' && (
           <h1 className="text-[1.85rem] font-bold text-white mb-8 pb-5 border-b border-[#333333] leading-tight tracking-[-0.02em]">{title}</h1>
@@ -176,7 +195,11 @@ export function NoteEditor() {
               ? 'obsidian-prose'
               : 'prose prose-sm dark:prose-invert max-w-none dark:text-white prose-headings:font-semibold prose-code:before:content-none prose-code:after:content-none'
           )}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{content}</ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm, remarkMath]}
+              rehypePlugins={[rehypeKatex]}
+              components={mdComponents}
+            >{content}</ReactMarkdown>
           </div>
         ) : (
           <p className={clsx('text-sm italic', viewMode === 'read' ? 'text-[#555]' : 'text-slate-400 dark:text-slate-600')}>空白筆記</p>

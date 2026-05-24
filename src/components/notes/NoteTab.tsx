@@ -23,6 +23,7 @@ export function NoteTab({ courseId }: NoteTabProps) {
   const [newTitle, setNewTitle] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
+  const importFolderRef = useRef<HTMLInputElement>(null)
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
@@ -142,6 +143,16 @@ export function NoteTab({ courseId }: NoteTabProps) {
             className="hidden"
             onChange={handleImport}
           />
+          {/* Folder import — webkitdirectory preserves relative paths so images resolve correctly */}
+          <input
+            ref={importFolderRef}
+            type="file"
+            // @ts-expect-error webkitdirectory is non-standard but widely supported
+            webkitdirectory=""
+            multiple
+            className="hidden"
+            onChange={handleImport}
+          />
           <Button size="sm" onClick={() => setShowNewNote(true)}>
             <Plus size={14} /> 新增筆記
           </Button>
@@ -234,11 +245,15 @@ export function NoteTab({ courseId }: NoteTabProps) {
             <span className="px-3 text-xs text-slate-400 dark:text-slate-500">或</span>
             <div className="flex-1 border-t border-slate-200 dark:border-slate-700" />
           </div>
-          <div>
-            <Button variant="secondary" className="w-full justify-center" onClick={() => importInputRef.current?.click()}>
-              <Upload size={14} /> 匯入 .md 檔案或圖片
+          <div className="space-y-2">
+            <Button variant="secondary" className="w-full justify-center" onClick={() => importFolderRef.current?.click()}>
+              <Upload size={14} /> 選取含圖片的資料夾
             </Button>
-            <p className="text-xs text-slate-400 dark:text-slate-500 text-center mt-1.5">支援多個 .md 與圖片一起選取</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 text-center">推薦：選整個資料夾，圖片會自動內嵌</p>
+            <Button variant="secondary" className="w-full justify-center" onClick={() => importInputRef.current?.click()}>
+              <Upload size={14} /> 選取個別 .md 檔案
+            </Button>
+            <p className="text-xs text-slate-400 dark:text-slate-500 text-center">純文字筆記，不含圖片</p>
           </div>
         </div>
       </Modal>
