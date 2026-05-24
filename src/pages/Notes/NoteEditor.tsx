@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
-import rehypeKatex from 'rehype-katex'
+import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { ArrowLeft, Bold, List, Code, Quote, Star, Check, Tag, X, Pencil, Eye, Columns2 } from 'lucide-react'
 import type { Note } from '../../types'
@@ -134,7 +134,7 @@ export function NoteEditor() {
     { mode: 'split', icon: Columns2, label: '分割' },
   ]
 
-  // Custom renderers — images with error fallback, links opening in new tab
+  // Custom renderers — images with error fallback, links in new tab, KaTeX math
   const mdComponents = {
     img({ src, alt }: { src?: string; alt?: string }) {
       return (
@@ -173,6 +173,25 @@ export function NoteEditor() {
         </a>
       )
     },
+    // remark-math turns $...$ into <code class="language-math math-inline">
+    // and $$...$$ into <pre><code class="language-math math-display">
+    // We intercept those code elements and render directly with katex
+    code({ className, children }: { className?: string; children?: React.ReactNode }) {
+      const cls = className ?? ''
+      if (cls.includes('language-math')) {
+        const math = String(children).trim()
+        const isDisplay = cls.includes('math-display')
+        try {
+          const html = katex.renderToString(math, { displayMode: isDisplay, throwOnError: false, strict: false })
+          return isDisplay
+            ? <div className="katex-block" dangerouslySetInnerHTML={{ __html: html }} />
+            : <span dangerouslySetInnerHTML={{ __html: html }} />
+        } catch {
+          return <code className={className}>{children}</code>
+        }
+      }
+      return <code className={className}>{children}</code>
+    },
   }
 
   const markdownView = (
@@ -197,7 +216,6 @@ export function NoteEditor() {
           )}>
             <ReactMarkdown
               remarkPlugins={[remarkGfm, remarkMath]}
-              rehypePlugins={[rehypeKatex]}
               components={mdComponents}
             >{content}</ReactMarkdown>
           </div>

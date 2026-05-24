@@ -162,19 +162,17 @@
 }
 
 /* ─── KaTeX math — dark theme overrides ─────────────────────────── */
-.obsidian-prose .katex {
-  color: #e8e8e8;
-  font-size: 1.05em;
-}
-.obsidian-prose .katex-display {
+.katex { color: #e8e8e8; }
+
+/* Display (block) math wrapper */
+.katex-block {
   margin: 1.5em 0;
   overflow-x: auto;
   overflow-y: hidden;
+  text-align: center;
 }
-.obsidian-prose .katex-display > .katex {
-  color: #f0f0f0;
-}
-/* inline math in regular prose */
-.prose .katex {
-  font-size: 1em;
-}
+.katex-block .katex { font-size: 1.15em; color: #f0f0f0; }
+
+/* Inline math */
+.obsidian-prose span > .katex { font-size: 1.05em; }
+.prose span > .katex { font-size: 1em; }
