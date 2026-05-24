@@ -1,18 +1,18 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
-import { ArrowLeft, Bold, List, Code, Quote, Star, Check, Tag, X, Pencil, Eye, Columns2 } from 'lucide-react'
+import { ArrowLeft, Bold, List, Code, Quote, Star, Check, Tag, X, Pencil, Eye, Columns2, FileText, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import type { Note } from '../../types'
-import { getNoteById, updateNote } from '../../db/notes'
+import { getNoteById, getNotesByCourse, updateNote } from '../../db/notes'
 import { clsx } from '../../utils/clsx'
 
 type ViewMode = 'edit' | 'read' | 'split'
 
-// ── Helpers for TOC & heading anchors ────────────────────────────────────────
+// ── Helpers for heading anchors ────────────��──────────────────────────────────
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -57,21 +57,11 @@ export function NoteEditor() {
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
     (localStorage.getItem('noteViewMode') as ViewMode) ?? 'edit'
   )
-  const [activeId, setActiveId] = useState('')
+  const [courseNotes, setCourseNotes] = useState<Note[]>([])
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    localStorage.getItem('noteSidebar') !== 'closed'
+  )
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  // Extract headings from raw markdown for the TOC
-  const headings = useMemo(() => {
-    const result: { level: number; text: string; id: string }[] = []
-    content.split('\n').forEach(line => {
-      const m = line.match(/^(#{1,6})\s+(.+?)(?:\s+#+)?$/)
-      if (m) {
-        const raw = m[2].replace(/[*_`[\]()]/g, '').trim()
-        result.push({ level: m[1].length, text: raw, id: slugify(raw) })
-      }
-    })
-    return result
-  }, [content])
 
   const debouncedContent = useDebounce(content, 1000)
   const debouncedTitle = useDebounce(title, 1000)
@@ -87,16 +77,31 @@ export function NoteEditor() {
           setTags(n.tags)
           setIsHighlight(n.isHighlight)
           setIsReviewed(n.isReviewed)
-          // Auto-open in read mode for imported notes with content
           if (n.content && !localStorage.getItem('noteViewMode')) setViewMode('read')
+          // Load sibling notes for the sidebar
+          getNotesByCourse(n.courseId).then(setCourseNotes)
         }
       })
     }
   }, [id])
 
+  // Refresh sidebar title when title changes (debounced)
+  useEffect(() => {
+    if (!id || !debouncedTitle) return
+    setCourseNotes(ns => ns.map(n => n.id === id ? { ...n, title: debouncedTitle } : n))
+  }, [debouncedTitle, id])
+
   function switchMode(m: ViewMode) {
     setViewMode(m)
     localStorage.setItem('noteViewMode', m)
+  }
+
+  function toggleSidebar() {
+    setSidebarOpen(v => {
+      const next = !v
+      localStorage.setItem('noteSidebar', next ? 'open' : 'closed')
+      return next
+    })
   }
 
   const save = useCallback(async (patch: Partial<Note>) => {
@@ -142,7 +147,6 @@ export function NoteEditor() {
     }, 0)
   }
 
-  // Drag image — convert to base64 so it persists after page reload
   async function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'))
@@ -162,13 +166,15 @@ export function NoteEditor() {
     )
   }
 
+  const isReadMode = viewMode === 'read'
+
   const modeButtons: { mode: ViewMode; icon: typeof Pencil; label: string }[] = [
     { mode: 'edit',  icon: Pencil,   label: '編輯' },
     { mode: 'read',  icon: Eye,      label: '閱讀' },
     { mode: 'split', icon: Columns2, label: '分割' },
   ]
 
-  // Custom renderers — images, links, KaTeX math, heading anchors for TOC
+  // Custom renderers
   const mdComponents = {
     img({ src, alt }: { src?: string; alt?: string }) {
       return (
@@ -194,7 +200,6 @@ export function NoteEditor() {
         </span>
       )
     },
-    // Always use window.open for external links; scroll for in-page anchors
     a({ href, children }: { href?: string; children?: React.ReactNode }) {
       const url = href ?? ''
       return (
@@ -214,14 +219,12 @@ export function NoteEditor() {
         </a>
       )
     },
-    // Heading renderers — attach ID so TOC anchor links work
     h1({ children }: { children?: React.ReactNode }) { return <h1 id={slugify(extractText(children))}>{children}</h1> },
     h2({ children }: { children?: React.ReactNode }) { return <h2 id={slugify(extractText(children))}>{children}</h2> },
     h3({ children }: { children?: React.ReactNode }) { return <h3 id={slugify(extractText(children))}>{children}</h3> },
     h4({ children }: { children?: React.ReactNode }) { return <h4 id={slugify(extractText(children))}>{children}</h4> },
     h5({ children }: { children?: React.ReactNode }) { return <h5 id={slugify(extractText(children))}>{children}</h5> },
     h6({ children }: { children?: React.ReactNode }) { return <h6 id={slugify(extractText(children))}>{children}</h6> },
-    // remark-math → <code class="language-math math-inline|math-display"> → render with KaTeX directly
     code({ className, children }: { className?: string; children?: React.ReactNode }) {
       const cls = className ?? ''
       if (cls.includes('language-math')) {
@@ -240,61 +243,47 @@ export function NoteEditor() {
     },
   }
 
-  // Shared markdown content node (used in both read and split)
-  const mdInner = content ? (
-    <div className={viewMode === 'read'
-      ? 'obsidian-prose'
-      : 'prose prose-sm dark:prose-invert max-w-none dark:text-white prose-headings:font-semibold prose-code:before:content-none prose-code:after:content-none'
-    }>
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} components={mdComponents}>{content}</ReactMarkdown>
-    </div>
-  ) : (
-    <p className={clsx('text-sm italic', viewMode === 'read' ? 'text-[#555]' : 'text-slate-400 dark:text-slate-600')}>空白筆記</p>
-  )
-
-  const markdownView = viewMode === 'read' ? (
-    // ── Read mode: dark Obsidian canvas with optional TOC sidebar ──────────────
-    <div className="overflow-y-auto h-full w-full bg-[#1e1e1e]">
-      <div
-        className="mx-auto px-8 py-12 flex gap-8 items-start"
-        style={{ maxWidth: headings.length > 0 ? '1100px' : '860px' }}
-      >
-        {/* TOC sidebar — only when headings exist */}
-        {headings.length > 0 && (
-          <nav className="w-48 shrink-0 sticky top-0 max-h-screen overflow-y-auto pb-16 pt-1">
-            <p className="text-[10px] font-semibold text-[#444] uppercase tracking-widest mb-3">目錄</p>
-            {headings.map((h, i) => (
+  // Sidebar: list of notes in the same course
+  const noteSidebar = (
+    <div className={clsx(
+      'flex-shrink-0 flex flex-col border-r overflow-hidden transition-all duration-200',
+      isReadMode
+        ? 'border-[#2a2a2a] bg-[#161616]'
+        : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60',
+      sidebarOpen ? 'w-52' : 'w-0'
+    )}>
+      {sidebarOpen && (
+        <>
+          <div className={clsx(
+            'px-3 py-2.5 text-[10px] font-semibold uppercase tracking-widest flex-shrink-0',
+            isReadMode ? 'text-[#444]' : 'text-slate-400 dark:text-slate-500'
+          )}>
+            課程筆記
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {courseNotes.map(n => (
               <button
-                key={i}
-                style={{ paddingLeft: `${(h.level - 1) * 10}px` }}
-                onClick={() => {
-                  setActiveId(h.id)
-                  document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }}
+                key={n.id}
+                onClick={() => navigate(`/notes/${n.id}`)}
                 className={clsx(
-                  'block w-full text-left text-xs py-[3px] px-2 rounded truncate transition-colors',
-                  activeId === h.id
-                    ? 'text-[#a78bfa] bg-[#2a2535]'
-                    : 'text-[#555] hover:text-[#999] hover:bg-[#242424]'
+                  'w-full text-left px-3 py-2 text-xs truncate transition-colors flex items-center gap-2',
+                  n.id === id
+                    ? isReadMode
+                      ? 'bg-[#2a2535] text-[#c4b5fd]'
+                      : 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                    : isReadMode
+                      ? 'text-[#666] hover:text-[#aaa] hover:bg-[#1e1e1e]'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
                 )}
               >
-                {h.text}
+                <FileText size={11} className="flex-shrink-0 opacity-60" />
+                <span className="truncate">{n.title || '（無標題）'}</span>
+                {n.isHighlight && <span className="text-amber-400 flex-shrink-0">★</span>}
               </button>
             ))}
-          </nav>
-        )}
-
-        {/* Main content */}
-        <div className={clsx('flex-1 min-w-0', headings.length === 0 && 'max-w-[760px] mx-auto')}>
-          <h1 className="text-[1.85rem] font-bold text-white mb-8 pb-5 border-b border-[#333333] leading-tight tracking-[-0.02em]">{title}</h1>
-          {mdInner}
-        </div>
-      </div>
-    </div>
-  ) : (
-    // ── Split mode: simple scroll pane ────────────────────────────────────────
-    <div className="overflow-y-auto h-full w-full">
-      <div className="w-full px-10 py-8">{mdInner}</div>
+          </div>
+        </>
+      )}
     </div>
   )
 
@@ -312,18 +301,55 @@ export function NoteEditor() {
     </div>
   )
 
+  const markdownView = (
+    <div className={clsx(
+      'overflow-y-auto h-full w-full',
+      isReadMode ? 'bg-[#1e1e1e]' : ''
+    )}>
+      <div className={clsx(
+        'mx-auto',
+        isReadMode ? 'max-w-[760px] px-10 py-12' : 'px-10 py-8'
+      )}>
+        {isReadMode && (
+          <h1 className="text-[1.85rem] font-bold text-white mb-8 pb-5 border-b border-[#333333] leading-tight tracking-[-0.02em]">{title}</h1>
+        )}
+        {content ? (
+          <div className={isReadMode
+            ? 'obsidian-prose'
+            : 'prose prose-sm dark:prose-invert max-w-none dark:text-white prose-headings:font-semibold prose-code:before:content-none prose-code:after:content-none'
+          }>
+            <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} components={mdComponents}>{content}</ReactMarkdown>
+          </div>
+        ) : (
+          <p className={clsx('text-sm italic', isReadMode ? 'text-[#555]' : 'text-slate-400 dark:text-slate-600')}>空白筆記</p>
+        )}
+      </div>
+    </div>
+  )
+
   return (
-    <div className={clsx('h-full flex flex-col', viewMode === 'read' ? 'bg-[#1e1e1e]' : 'bg-white dark:bg-slate-900')}>
+    <div className={clsx('h-full flex flex-col', isReadMode ? 'bg-[#1e1e1e]' : 'bg-white dark:bg-slate-900')}>
       {/* Top bar */}
-      <div className={clsx('flex items-center gap-3 px-6 py-3 border-b flex-shrink-0', viewMode === 'read' ? 'border-[#383838]' : 'border-slate-200 dark:border-slate-700')}>
+      <div className={clsx('flex items-center gap-2 px-4 py-3 border-b flex-shrink-0', isReadMode ? 'border-[#2a2a2a]' : 'border-slate-200 dark:border-slate-700')}>
+        {/* Sidebar toggle */}
+        <button
+          onClick={toggleSidebar}
+          title={sidebarOpen ? '收起筆記列表' : '展開���記列表'}
+          className={clsx('p-1.5 rounded transition-colors flex-shrink-0',
+            isReadMode ? 'text-[#555] hover:text-[#999]' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+          )}
+        >
+          {sidebarOpen ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
+        </button>
+
         <button
           onClick={() => navigate(-1)}
-          className={clsx('transition-colors flex-shrink-0', viewMode === 'read' ? 'text-[#888] hover:text-[#bbb]' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200')}
+          className={clsx('transition-colors flex-shrink-0', isReadMode ? 'text-[#888] hover:text-[#bbb]' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200')}
         >
           <ArrowLeft size={16} />
         </button>
 
-        {viewMode === 'read' ? (
+        {isReadMode ? (
           <span className="flex-1 text-sm text-[#666] truncate">{title}</span>
         ) : (
           <input
@@ -335,8 +361,7 @@ export function NoteEditor() {
         )}
 
         <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Mode switcher */}
-          <div className={clsx('flex rounded-lg p-0.5 mr-1', viewMode === 'read' ? 'bg-[#2a2a2a]' : 'bg-slate-100 dark:bg-slate-800')}>
+          <div className={clsx('flex rounded-lg p-0.5 mr-1', isReadMode ? 'bg-[#2a2a2a]' : 'bg-slate-100 dark:bg-slate-800')}>
             {modeButtons.map(({ mode, icon: Icon, label }) => (
               <button
                 key={mode}
@@ -344,7 +369,7 @@ export function NoteEditor() {
                 title={label}
                 className={clsx(
                   'p-1.5 rounded-md transition-colors',
-                  viewMode === 'read'
+                  isReadMode
                     ? mode === 'read'
                       ? 'bg-[#3a3a3a] text-white shadow-sm'
                       : 'text-[#666] hover:text-[#aaa]'
@@ -358,7 +383,7 @@ export function NoteEditor() {
             ))}
           </div>
 
-          {viewMode !== 'read' && (saving ? (
+          {!isReadMode && (saving ? (
             <span className="text-xs text-slate-400 dark:text-slate-500 mr-1">儲存中…</span>
           ) : lastSaved ? (
             <span className="text-xs text-slate-400 dark:text-slate-500 mr-1">已自動儲存</span>
@@ -385,36 +410,38 @@ export function NoteEditor() {
         </div>
       </div>
 
-      {/* Meta bar — hidden in read mode to keep the reading surface clean */}
-      {viewMode !== 'read' && <div className={clsx('flex items-center gap-4 px-6 py-2 border-b flex-wrap flex-shrink-0', 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50')}>
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-slate-500 dark:text-slate-400">週次</label>
-          <input
-            type="number" min="1" max="20" placeholder="—"
-            value={week} onChange={e => setWeek(e.target.value)} onBlur={handleWeekBlur}
-            className="w-14 text-xs rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+      {/* Meta bar — hidden in read mode */}
+      {!isReadMode && (
+        <div className="flex items-center gap-4 px-6 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex-shrink-0 flex-wrap">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-500 dark:text-slate-400">週次</label>
+            <input
+              type="number" min="1" max="20" placeholder="—"
+              value={week} onChange={e => setWeek(e.target.value)} onBlur={handleWeekBlur}
+              className="w-14 text-xs rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Tag size={12} className="text-slate-400" />
+            {tags.map(t => (
+              <span key={t} className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
+                {t}
+                <button onClick={() => removeTag(t)} className="hover:text-red-500 transition-colors"><X size={10} /></button>
+              </span>
+            ))}
+            <input
+              className="text-xs bg-transparent border-none outline-none text-slate-600 dark:text-slate-300 placeholder-slate-400 w-20"
+              placeholder="+ 標籤" value={tagInput}
+              onChange={e => setTagInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag() } }}
+              onBlur={addTag}
+            />
+          </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Tag size={12} className="text-slate-400" />
-          {tags.map(t => (
-            <span key={t} className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
-              {t}
-              <button onClick={() => removeTag(t)} className="hover:text-red-500 transition-colors"><X size={10} /></button>
-            </span>
-          ))}
-          <input
-            className="text-xs bg-transparent border-none outline-none text-slate-600 dark:text-slate-300 placeholder-slate-400 w-20"
-            placeholder="+ 標籤" value={tagInput}
-            onChange={e => setTagInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag() } }}
-            onBlur={addTag}
-          />
-        </div>
-      </div>}
+      )}
 
-      {/* Markdown toolbar — only in edit / split mode */}
-      {viewMode !== 'read' && (
+      {/* Markdown toolbar — only in edit / split */}
+      {!isReadMode && (
         <div className="flex items-center gap-1 px-6 py-1.5 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
           {[
             { icon: Bold,  action: () => insertMarkdown('**', '**'), title: '粗體' },
@@ -431,20 +458,25 @@ export function NoteEditor() {
         </div>
       )}
 
-      {/* Content area */}
+      {/* Main area: sidebar + content */}
       <div className="flex-1 overflow-hidden flex">
-        {viewMode === 'edit' && editView}
-        {viewMode === 'read' && markdownView}
-        {viewMode === 'split' && (
-          <>
-            <div className="flex-1 border-r border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
-              {editView}
-            </div>
-            <div className="flex-1 overflow-hidden">
-              {markdownView}
-            </div>
-          </>
-        )}
+        {noteSidebar}
+
+        {/* Content pane */}
+        <div className="flex-1 overflow-hidden flex">
+          {viewMode === 'edit' && editView}
+          {viewMode === 'read' && markdownView}
+          {viewMode === 'split' && (
+            <>
+              <div className="flex-1 border-r border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+                {editView}
+              </div>
+              <div className="flex-1 overflow-hidden">
+                {markdownView}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
