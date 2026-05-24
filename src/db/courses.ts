@@ -6,6 +6,10 @@ export async function getCoursesBySemester(semesterId: string): Promise<Course[]
   return db.courses.where('semesterId').equals(semesterId).sortBy('createdAt')
 }
 
+export async function getAllCourses(): Promise<Course[]> {
+  return db.courses.orderBy('createdAt').toArray()
+}
+
 export async function getCourseById(id: string): Promise<Course | undefined> {
   return db.courses.get(id)
 }
