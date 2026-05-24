@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -11,6 +11,26 @@ import { getNoteById, updateNote } from '../../db/notes'
 import { clsx } from '../../utils/clsx'
 
 type ViewMode = 'edit' | 'read' | 'split'
+
+// ── Helpers for TOC & heading anchors ────────────────────────────────────────
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w一-龥-]/g, '')
+    .replace(/-+/g, '-')
+}
+
+function extractText(node: React.ReactNode): string {
+  if (node === null || node === undefined) return ''
+  if (typeof node === 'string') return node
+  if (typeof node === 'number' || typeof node === 'boolean') return String(node)
+  if (Array.isArray(node)) return node.map(extractText).join('')
+  if (typeof node === 'object' && 'props' in node)
+    return extractText((node as React.ReactElement).props.children)
+  return ''
+}
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value)
@@ -37,7 +57,21 @@ export function NoteEditor() {
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
     (localStorage.getItem('noteViewMode') as ViewMode) ?? 'edit'
   )
+  const [activeId, setActiveId] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Extract headings from raw markdown for the TOC
+  const headings = useMemo(() => {
+    const result: { level: number; text: string; id: string }[] = []
+    content.split('\n').forEach(line => {
+      const m = line.match(/^(#{1,6})\s+(.+?)(?:\s+#+)?$/)
+      if (m) {
+        const raw = m[2].replace(/[*_`[\]()]/g, '').trim()
+        result.push({ level: m[1].length, text: raw, id: slugify(raw) })
+      }
+    })
+    return result
+  }, [content])
 
   const debouncedContent = useDebounce(content, 1000)
   const debouncedTitle = useDebounce(title, 1000)
@@ -134,7 +168,7 @@ export function NoteEditor() {
     { mode: 'split', icon: Columns2, label: '分割' },
   ]
 
-  // Custom renderers — images with error fallback, links in new tab, KaTeX math
+  // Custom renderers — images, links, KaTeX math, heading anchors for TOC
   const mdComponents = {
     img({ src, alt }: { src?: string; alt?: string }) {
       return (
@@ -160,22 +194,34 @@ export function NoteEditor() {
         </span>
       )
     },
+    // Always use window.open for external links; scroll for in-page anchors
     a({ href, children }: { href?: string; children?: React.ReactNode }) {
-      const isExternal = /^https?:\/\//.test(href ?? '')
+      const url = href ?? ''
       return (
         <a
-          href={href ?? '#'}
-          target={isExternal ? '_blank' : undefined}
-          rel={isExternal ? 'noopener noreferrer' : undefined}
-          onClick={!isExternal ? (e: React.MouseEvent) => { e.preventDefault() } : undefined}
+          href={url || '#'}
+          style={{ cursor: 'pointer' }}
+          onClick={(e: React.MouseEvent) => {
+            e.preventDefault()
+            if (/^https?:\/\//.test(url)) {
+              window.open(url, '_blank', 'noopener,noreferrer')
+            } else if (url.startsWith('#')) {
+              document.getElementById(url.slice(1))?.scrollIntoView({ behavior: 'smooth' })
+            }
+          }}
         >
           {children}
         </a>
       )
     },
-    // remark-math turns $...$ into <code class="language-math math-inline">
-    // and $$...$$ into <pre><code class="language-math math-display">
-    // We intercept those code elements and render directly with katex
+    // Heading renderers — attach ID so TOC anchor links work
+    h1({ children }: { children?: React.ReactNode }) { return <h1 id={slugify(extractText(children))}>{children}</h1> },
+    h2({ children }: { children?: React.ReactNode }) { return <h2 id={slugify(extractText(children))}>{children}</h2> },
+    h3({ children }: { children?: React.ReactNode }) { return <h3 id={slugify(extractText(children))}>{children}</h3> },
+    h4({ children }: { children?: React.ReactNode }) { return <h4 id={slugify(extractText(children))}>{children}</h4> },
+    h5({ children }: { children?: React.ReactNode }) { return <h5 id={slugify(extractText(children))}>{children}</h5> },
+    h6({ children }: { children?: React.ReactNode }) { return <h6 id={slugify(extractText(children))}>{children}</h6> },
+    // remark-math → <code class="language-math math-inline|math-display"> → render with KaTeX directly
     code({ className, children }: { className?: string; children?: React.ReactNode }) {
       const cls = className ?? ''
       if (cls.includes('language-math')) {
@@ -194,35 +240,61 @@ export function NoteEditor() {
     },
   }
 
-  const markdownView = (
-    // Outer: scroll container, flex so we can use justify-center for reliable centering
-    <div className={clsx(
-      'overflow-y-auto h-full w-full flex flex-col',
-      viewMode === 'read' ? 'bg-[#1e1e1e] items-center' : ''
-    )}>
-      <div className={clsx(
-        viewMode === 'read'
-          ? 'w-full max-w-[760px] px-10 py-12'
-          : 'w-full px-10 py-8'
-      )}>
-        {viewMode === 'read' && (
+  // Shared markdown content node (used in both read and split)
+  const mdInner = content ? (
+    <div className={viewMode === 'read'
+      ? 'obsidian-prose'
+      : 'prose prose-sm dark:prose-invert max-w-none dark:text-white prose-headings:font-semibold prose-code:before:content-none prose-code:after:content-none'
+    }>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} components={mdComponents}>{content}</ReactMarkdown>
+    </div>
+  ) : (
+    <p className={clsx('text-sm italic', viewMode === 'read' ? 'text-[#555]' : 'text-slate-400 dark:text-slate-600')}>空白筆記</p>
+  )
+
+  const markdownView = viewMode === 'read' ? (
+    // ── Read mode: dark Obsidian canvas with optional TOC sidebar ──────────────
+    <div className="overflow-y-auto h-full w-full bg-[#1e1e1e]">
+      <div
+        className="mx-auto px-8 py-12 flex gap-8 items-start"
+        style={{ maxWidth: headings.length > 0 ? '1100px' : '860px' }}
+      >
+        {/* TOC sidebar — only when headings exist */}
+        {headings.length > 0 && (
+          <nav className="w-48 shrink-0 sticky top-0 max-h-screen overflow-y-auto pb-16 pt-1">
+            <p className="text-[10px] font-semibold text-[#444] uppercase tracking-widest mb-3">目錄</p>
+            {headings.map((h, i) => (
+              <button
+                key={i}
+                style={{ paddingLeft: `${(h.level - 1) * 10}px` }}
+                onClick={() => {
+                  setActiveId(h.id)
+                  document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }}
+                className={clsx(
+                  'block w-full text-left text-xs py-[3px] px-2 rounded truncate transition-colors',
+                  activeId === h.id
+                    ? 'text-[#a78bfa] bg-[#2a2535]'
+                    : 'text-[#555] hover:text-[#999] hover:bg-[#242424]'
+                )}
+              >
+                {h.text}
+              </button>
+            ))}
+          </nav>
+        )}
+
+        {/* Main content */}
+        <div className={clsx('flex-1 min-w-0', headings.length === 0 && 'max-w-[760px] mx-auto')}>
           <h1 className="text-[1.85rem] font-bold text-white mb-8 pb-5 border-b border-[#333333] leading-tight tracking-[-0.02em]">{title}</h1>
-        )}
-        {content ? (
-          <div className={clsx(
-            viewMode === 'read'
-              ? 'obsidian-prose'
-              : 'prose prose-sm dark:prose-invert max-w-none dark:text-white prose-headings:font-semibold prose-code:before:content-none prose-code:after:content-none'
-          )}>
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm, remarkMath]}
-              components={mdComponents}
-            >{content}</ReactMarkdown>
-          </div>
-        ) : (
-          <p className={clsx('text-sm italic', viewMode === 'read' ? 'text-[#555]' : 'text-slate-400 dark:text-slate-600')}>空白筆記</p>
-        )}
+          {mdInner}
+        </div>
       </div>
+    </div>
+  ) : (
+    // ── Split mode: simple scroll pane ────────────────────────────────────────
+    <div className="overflow-y-auto h-full w-full">
+      <div className="w-full px-10 py-8">{mdInner}</div>
     </div>
   )
 
