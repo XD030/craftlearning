@@ -26,7 +26,7 @@ export function NoteTab({ courseId }: NoteTabProps) {
   const importInputRef = useRef<HTMLInputElement>(null)
   const importFolderRef = useRef<HTMLInputElement>(null)
 
-  // ── Multi-select ────────────────────────────────────────────────────────────
+  // ── Multi-select ─────────────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [lastClickedId, setLastClickedId] = useState<string | null>(null)
   const [showBulkDelete, setShowBulkDelete] = useState(false)
@@ -34,24 +34,24 @@ export function NoteTab({ courseId }: NoteTabProps) {
   const [allCourses, setAllCourses] = useState<Course[]>([])
   const [targetCourseId, setTargetCourseId] = useState('')
 
-  // Flatten notes into display order for shift-range selection
-  const flatNotes = useCallback(() => notes.map(n => n.id), [notes])
+  const isSelectMode = selectedIds.size > 0
 
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    setLastClickedId(id)
+  }
+
+  // Row main click (not checkbox / not long-press)
   function handleNoteClick(note: Note, e: React.MouseEvent) {
-    if (e.ctrlKey || e.metaKey) {
-      // Toggle single item
-      e.preventDefault()
-      setSelectedIds(prev => {
-        const next = new Set(prev)
-        if (next.has(note.id)) next.delete(note.id)
-        else next.add(note.id)
-        return next
-      })
-      setLastClickedId(note.id)
-    } else if (e.shiftKey && lastClickedId) {
+    if (e.shiftKey && lastClickedId) {
       // Range select
       e.preventDefault()
-      const ids = flatNotes()
+      const ids = notes.map(n => n.id)
       const a = ids.indexOf(lastClickedId)
       const b = ids.indexOf(note.id)
       if (a !== -1 && b !== -1) {
@@ -61,18 +61,13 @@ export function NoteTab({ courseId }: NoteTabProps) {
           for (let i = from; i <= to; i++) next.add(ids[i])
           return next
         })
+        setLastClickedId(note.id)
       }
-    } else if (selectedIds.size > 0) {
-      // Already in selection mode: single click toggles (no navigation)
-      setSelectedIds(prev => {
-        const next = new Set(prev)
-        if (next.has(note.id)) next.delete(note.id)
-        else next.add(note.id)
-        return next
-      })
-      setLastClickedId(note.id)
+    } else if (e.ctrlKey || e.metaKey || isSelectMode) {
+      // Toggle selection
+      toggleSelect(note.id)
     } else {
-      // Normal click → navigate
+      // Normal — navigate
       navigate(`/notes/${note.id}`)
       setLastClickedId(note.id)
     }
@@ -102,15 +97,15 @@ export function NoteTab({ courseId }: NoteTabProps) {
 
   // Esc clears selection
   useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
+    function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') setSelectedIds(new Set())
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   // ── Import ───────────────────────────────────────────────────────────────────
-  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+  const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
     if (files.length === 0) return
 
@@ -118,7 +113,6 @@ export function NoteTab({ courseId }: NoteTabProps) {
     const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|ico|tiff?)$/i
     const imageFiles = files.filter(f => f.type.startsWith('image/') || IMAGE_EXT.test(f.name))
 
-    // Build image lookup: webkitRelativePath → dataUrl  AND  bare filename → dataUrl
     const imageMap: Record<string, string> = {}
     await Promise.all(imageFiles.map(file => new Promise<void>(resolve => {
       const reader = new FileReader()
@@ -150,7 +144,6 @@ export function NoteTab({ courseId }: NoteTabProps) {
 
       // Step 1: Obsidian wikilink images  ![[image.png]]  or  ![[image.png|300]]
       content = content.replace(/!\[\[([^\]]+)\]\]/g, (_m, raw) => {
-        // Strip optional size hint after |  e.g.  "image.png|300" → "image.png"
         const src = raw.trim().split('|')[0].trim()
         const dataUrl = resolveImage(mdFile.webkitRelativePath, src)
         const label = src.split('/').pop() ?? src
@@ -172,7 +165,7 @@ export function NoteTab({ courseId }: NoteTabProps) {
 
     e.target.value = ''
     if (firstNote) navigate(`/notes/${firstNote.id}`)
-  }
+  }, [courseId, navigate])
 
   useEffect(() => {
     getNotesByCourse(courseId).then(setNotes)
@@ -219,7 +212,9 @@ export function NoteTab({ courseId }: NoteTabProps) {
         key={note.id}
         note={note}
         selected={selectedIds.has(note.id)}
-        onClick={e => handleNoteClick(note, e)}
+        isSelectMode={isSelectMode}
+        onMainClick={e => handleNoteClick(note, e)}
+        onToggleSelect={() => toggleSelect(note.id)}
         onDelete={() => setDeletingId(note.id)}
       />
     ))
@@ -246,15 +241,8 @@ export function NoteTab({ courseId }: NoteTabProps) {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".md,image/*"
-            multiple
-            className="hidden"
-            onChange={handleImport}
-          />
-          {/* Folder import — webkitdirectory preserves relative paths so images resolve correctly */}
+          <input ref={importInputRef} type="file" accept=".md,image/*" multiple className="hidden" onChange={handleImport} />
+          {/* webkitdirectory preserves relative paths so images resolve correctly */}
           <input
             ref={importFolderRef}
             type="file"
@@ -271,10 +259,10 @@ export function NoteTab({ courseId }: NoteTabProps) {
       </div>
 
       {/* Bulk action bar */}
-      {selectedIds.size > 0 && (
+      {isSelectMode && (
         <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 mb-4 flex-wrap">
           <span className="text-sm text-blue-700 dark:text-blue-300 font-medium flex-1 min-w-0">
-            已選取 {selectedIds.size} 則筆記
+            已選取 {selectedIds.size} 則
           </span>
           <button
             onClick={() => setSelectedIds(new Set())}
@@ -334,9 +322,7 @@ export function NoteTab({ courseId }: NoteTabProps) {
           {notes.filter(n => n.tags.length === 0).length > 0 && (
             <section>
               <h3 className="text-xs font-semibold text-slate-400 dark:text-slate-500 mb-2">未標籤</h3>
-              <div className="space-y-1.5">
-                {renderNotes(notes.filter(n => n.tags.length === 0))}
-              </div>
+              <div className="space-y-1.5">{renderNotes(notes.filter(n => n.tags.length === 0))}</div>
             </section>
           )}
         </div>
@@ -425,10 +411,7 @@ export function NoteTab({ courseId }: NoteTabProps) {
                     onChange={() => setTargetCourseId(c.id)}
                     className="accent-blue-500"
                   />
-                  <div
-                    className="w-3 h-3 rounded-full flex-shrink-0"
-                    style={{ background: c.color }}
-                  />
+                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: c.color }} />
                   <span className="text-sm text-slate-800 dark:text-slate-100 truncate">{c.name}</span>
                 </label>
               ))}
@@ -450,32 +433,87 @@ export function NoteTab({ courseId }: NoteTabProps) {
 function NoteRow({
   note,
   selected,
-  onClick,
+  isSelectMode,
+  onMainClick,
+  onToggleSelect,
   onDelete,
 }: {
   note: Note
   selected: boolean
-  onClick: (e: React.MouseEvent) => void
+  isSelectMode: boolean
+  onMainClick: (e: React.MouseEvent) => void
+  onToggleSelect: () => void
   onDelete: () => void
 }) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const didLongPress = useRef(false)
+  const startPos = useRef({ x: 0, y: 0 })
+
+  function startLongPress(e: React.PointerEvent) {
+    startPos.current = { x: e.clientX, y: e.clientY }
+    didLongPress.current = false
+    timerRef.current = setTimeout(() => {
+      didLongPress.current = true
+      onToggleSelect()
+      // Haptic feedback on devices that support it
+      navigator.vibrate?.(40)
+    }, 500)
+  }
+
+  function cancelLongPress() {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+  }
+
+  function handlePointerMove(e: React.PointerEvent) {
+    const dx = e.clientX - startPos.current.x
+    const dy = e.clientY - startPos.current.y
+    // Cancel if moved more than 8px (distinguishes scroll from long-press)
+    if (dx * dx + dy * dy > 64) cancelLongPress()
+  }
+
+  function handleClick(e: React.MouseEvent) {
+    // Swallow the click that follows a long-press
+    if (didLongPress.current) {
+      didLongPress.current = false
+      return
+    }
+    onMainClick(e)
+  }
+
   return (
     <div
       className={clsx(
-        'group flex items-center gap-3 rounded-lg border px-3 py-3 transition-colors cursor-pointer select-none',
+        'group flex items-center gap-3 rounded-lg border px-3 py-3 transition-colors select-none',
         selected
-          ? 'border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600'
+          ? 'border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20 cursor-pointer'
+          : isSelectMode
+            ? 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer'
+            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer'
       )}
-      onClick={onClick}
+      onPointerDown={startLongPress}
+      onPointerUp={cancelLongPress}
+      onPointerLeave={cancelLongPress}
+      onPointerCancel={cancelLongPress}
+      onPointerMove={handlePointerMove}
+      onClick={handleClick}
     >
-      {/* Checkbox indicator */}
-      <div className={clsx(
-        'flex-shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center transition-all',
-        selected
-          ? 'border-blue-500 bg-blue-500'
-          : 'border-transparent group-hover:border-slate-300 dark:group-hover:border-slate-500'
-      )}>
-        {selected && <Check size={10} className="text-white" strokeWidth={3} />}
+      {/* Circular checkbox — Google Drive style */}
+      {/* Always visible when selected or in select mode; appears on hover otherwise */}
+      <div
+        onClick={e => { e.stopPropagation(); onToggleSelect() }}
+        className={clsx(
+          'flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer',
+          selected
+            ? 'border-blue-500 bg-blue-500 opacity-100'
+            : isSelectMode
+              ? 'border-slate-300 dark:border-slate-500 opacity-100 hover:border-blue-400'
+              : 'border-slate-300 dark:border-slate-500 opacity-0 group-hover:opacity-100'
+        )}
+      >
+        {selected && <Check size={11} className="text-white" strokeWidth={3} />}
       </div>
 
       <FileText size={14} className="text-slate-400 flex-shrink-0" />
@@ -491,7 +529,10 @@ function NoteRow({
 
       <button
         onClick={e => { e.stopPropagation(); onDelete() }}
-        className="opacity-0 group-hover:opacity-100 p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all flex-shrink-0"
+        className={clsx(
+          'p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all flex-shrink-0',
+          isSelectMode ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'
+        )}
       >
         <Trash2 size={13} />
       </button>
