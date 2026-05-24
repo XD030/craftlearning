@@ -307,8 +307,8 @@ export function NoteEditor() {
       isReadMode ? 'bg-[#1e1e1e]' : ''
     )}>
       <div className={clsx(
-        'mx-auto',
-        isReadMode ? 'max-w-[760px] px-10 py-12' : 'px-10 py-8'
+        'mx-auto w-full',
+        isReadMode ? 'max-w-5xl px-12 py-12' : 'px-8 py-8'
       )}>
         {isReadMode && (
           <h1 className="text-[1.85rem] font-bold text-white mb-8 pb-5 border-b border-[#333333] leading-tight tracking-[-0.02em]">{title}</h1>
@@ -328,7 +328,7 @@ export function NoteEditor() {
   )
 
   return (
-    <div className={clsx('h-full flex flex-col', isReadMode ? 'bg-[#1e1e1e]' : 'bg-white dark:bg-slate-900')}>
+    <div className={clsx('h-screen flex flex-col', isReadMode ? 'bg-[#1e1e1e]' : 'bg-white dark:bg-slate-900')}>
       {/* Top bar */}
       <div className={clsx('flex items-center gap-2 px-4 py-3 border-b flex-shrink-0', isReadMode ? 'border-[#2a2a2a]' : 'border-slate-200 dark:border-slate-700')}>
         {/* Sidebar toggle */}
@@ -343,8 +343,9 @@ export function NoteEditor() {
         </button>
 
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate(`/courses/${note.courseId}`)}
           className={clsx('transition-colors flex-shrink-0', isReadMode ? 'text-[#888] hover:text-[#bbb]' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200')}
+          title="回到課程"
         >
           <ArrowLeft size={16} />
         </button>

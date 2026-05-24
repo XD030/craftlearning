@@ -30,7 +30,8 @@ export function NoteTab({ courseId }: NoteTabProps) {
     if (files.length === 0) return
 
     const mdFiles = files.filter(f => f.name.toLowerCase().endsWith('.md'))
-    const imageFiles = files.filter(f => f.type.startsWith('image/'))
+    const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|ico|tiff?)$/i
+    const imageFiles = files.filter(f => f.type.startsWith('image/') || IMAGE_EXT.test(f.name))
 
     // Build image lookup by relative path (folder import) and bare filename
     const imageMap: Record<string, string> = {}
@@ -61,6 +62,16 @@ export function NoteTab({ courseId }: NoteTabProps) {
     let firstNote: Note | null = null
     for (const mdFile of mdFiles) {
       let content = await mdFile.text()
+
+      // Step 1: Obsidian wikilink images  ![[image.png]]  or  ![[subdir/image.png]]
+      content = content.replace(/!\[\[([^\]]+)\]\]/g, (_match, src) => {
+        const trimmed = src.trim()
+        const dataUrl = resolveImage(mdFile.webkitRelativePath, trimmed)
+        const label = trimmed.split('/').pop() ?? trimmed
+        return dataUrl ? `![${label}](${dataUrl})` : `![${label}](${trimmed})`
+      })
+
+      // Step 2: Standard markdown images  ![alt](src)
       content = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
         if (/^(https?:|data:)/.test(src)) return match
         const dataUrl = resolveImage(mdFile.webkitRelativePath, src)
