@@ -34,6 +34,14 @@ export function NoteTab({ courseId }: NoteTabProps) {
   const [allCourses, setAllCourses] = useState<Course[]>([])
   const [targetCourseId, setTargetCourseId] = useState('')
 
+  // ── Import diagnostic ────────────────────────────────────────────────────────
+  const [importResult, setImportResult] = useState<{
+    mdCount: number
+    imgFilesFound: number
+    totalRefs: number
+    resolved: number
+  } | null>(null)
+
   const isSelectMode = selectedIds.size > 0
 
   function toggleSelect(id: string) {
@@ -139,21 +147,28 @@ export function NoteTab({ courseId }: NoteTabProps) {
     }
 
     let firstNote: Note | null = null
+    let totalRefs = 0
+    let resolved = 0
+
     for (const mdFile of mdFiles) {
       let content = await mdFile.text()
 
       // Step 1: Obsidian wikilink images  ![[image.png]]  or  ![[image.png|300]]
       content = content.replace(/!\[\[([^\]]+)\]\]/g, (_m, raw) => {
+        totalRefs++
         const src = raw.trim().split('|')[0].trim()
         const dataUrl = resolveImage(mdFile.webkitRelativePath, src)
         const label = src.split('/').pop() ?? src
+        if (dataUrl) resolved++
         return dataUrl ? `![${label}](${dataUrl})` : `![${label}](${src})`
       })
 
       // Step 2: Standard markdown images  ![alt](src)
       content = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
         if (/^(https?:|data:)/.test(src)) return match
+        totalRefs++
         const dataUrl = resolveImage(mdFile.webkitRelativePath, src)
+        if (dataUrl) resolved++
         return dataUrl ? `![${alt}](${dataUrl})` : match
       })
 
@@ -163,6 +178,7 @@ export function NoteTab({ courseId }: NoteTabProps) {
       if (!firstNote) firstNote = note
     }
 
+    setImportResult({ mdCount: mdFiles.length, imgFilesFound: imageFiles.length, totalRefs, resolved })
     e.target.value = ''
     if (firstNote) navigate(`/notes/${firstNote.id}`)
   }, [courseId, navigate])
@@ -277,6 +293,39 @@ export function NoteTab({ courseId }: NoteTabProps) {
           <Button size="sm" variant="danger" onClick={() => setShowBulkDelete(true)}>
             <Trash2 size={13} /> 刪除（{selectedIds.size}）
           </Button>
+        </div>
+      )}
+
+      {/* Import diagnostic banner */}
+      {importResult && (
+        <div className={clsx(
+          'flex items-start gap-3 px-4 py-3 rounded-lg border mb-4 text-sm',
+          importResult.totalRefs > 0 && importResult.resolved < importResult.totalRefs
+            ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-300'
+            : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 text-green-800 dark:text-green-300'
+        )}>
+          <div className="flex-1 space-y-1">
+            <p className="font-medium">
+              匯入完成：{importResult.mdCount} 則筆記
+              {importResult.totalRefs > 0 && `，圖片 ${importResult.resolved}/${importResult.totalRefs} 張嵌入成功`}
+              {importResult.totalRefs === 0 && importResult.imgFilesFound === 0 && '（無圖片）'}
+            </p>
+            {importResult.imgFilesFound === 0 && importResult.totalRefs > 0 && (
+              <p className="text-xs opacity-80">
+                ⚠️ 筆記中有 {importResult.totalRefs} 個圖片參照，但選取的資料夾裡<strong>沒有找到任何圖片檔</strong>。<br />
+                Obsidian 通常把圖片存在上一層的 <code>attachments/</code> 資料夾——請改成選取上一層資料夾（例如 <code>notes/</code>）再匯入。
+              </p>
+            )}
+            {importResult.imgFilesFound > 0 && importResult.resolved < importResult.totalRefs && (
+              <p className="text-xs opacity-80">
+                ⚠️ 有 {importResult.totalRefs - importResult.resolved} 張圖片找不到對應檔案。<br />
+                若圖片存放在所選資料夾以外，請選取更上層的資料夾重新匯入。
+              </p>
+            )}
+          </div>
+          <button onClick={() => setImportResult(null)} className="opacity-60 hover:opacity-100 flex-shrink-0">
+            <X size={14} />
+          </button>
         </div>
       )}
 
